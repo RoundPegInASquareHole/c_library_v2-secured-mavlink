@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE TERRAIN_REQUEST PACKING
 
 #define MAVLINK_MSG_ID_TERRAIN_REQUEST 133
@@ -59,6 +65,26 @@ typedef struct __mavlink_terrain_request_t {
 static inline uint16_t mavlink_msg_terrain_request_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                int32_t lat, int32_t lon, uint16_t grid_spacing, uint64_t mask)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN];
     _mav_put_uint64_t(buf, 0, mask);
@@ -74,53 +100,20 @@ static inline uint16_t mavlink_msg_terrain_request_pack(uint8_t system_id, uint8
     packet.lon = lon;
     packet.grid_spacing = grid_spacing;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_terrain_request_t* terrain_request_final = (mavlink_terrain_request_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), terrain_request_final, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_TERRAIN_REQUEST;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_TERRAIN_REQUEST_MIN_LEN, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN, MAVLINK_MSG_ID_TERRAIN_REQUEST_CRC);
-}
-
-/**
- * @brief Pack a terrain_request message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param lat [degE7] Latitude of SW corner of first grid
- * @param lon [degE7] Longitude of SW corner of first grid
- * @param grid_spacing [m] Grid spacing
- * @param mask  Bitmask of requested 4x4 grids (row major 8x7 array of grids, 56 bits)
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_terrain_request_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               int32_t lat, int32_t lon, uint16_t grid_spacing, uint64_t mask)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN];
-    _mav_put_uint64_t(buf, 0, mask);
-    _mav_put_int32_t(buf, 8, lat);
-    _mav_put_int32_t(buf, 12, lon);
-    _mav_put_uint16_t(buf, 16, grid_spacing);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
-#else
-    mavlink_terrain_request_t packet;
-    packet.mask = mask;
-    packet.lat = lat;
-    packet.lon = lon;
-    packet.grid_spacing = grid_spacing;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_TERRAIN_REQUEST;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_TERRAIN_REQUEST_MIN_LEN, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN, MAVLINK_MSG_ID_TERRAIN_REQUEST_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_TERRAIN_REQUEST_MIN_LEN, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
-#endif
 }
 
 /**
@@ -139,6 +132,27 @@ static inline uint16_t mavlink_msg_terrain_request_pack_chan(uint8_t system_id, 
                                mavlink_message_t* msg,
                                    int32_t lat,int32_t lon,uint16_t grid_spacing,uint64_t mask)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN];
     _mav_put_uint64_t(buf, 0, mask);
@@ -154,7 +168,16 @@ static inline uint16_t mavlink_msg_terrain_request_pack_chan(uint8_t system_id, 
     packet.lon = lon;
     packet.grid_spacing = grid_spacing;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_terrain_request_t* terrain_request_final = (mavlink_terrain_request_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), terrain_request_final, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_TERRAIN_REQUEST;
@@ -186,20 +209,6 @@ static inline uint16_t mavlink_msg_terrain_request_encode(uint8_t system_id, uin
 static inline uint16_t mavlink_msg_terrain_request_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_terrain_request_t* terrain_request)
 {
     return mavlink_msg_terrain_request_pack_chan(system_id, component_id, chan, msg, terrain_request->lat, terrain_request->lon, terrain_request->grid_spacing, terrain_request->mask);
-}
-
-/**
- * @brief Encode a terrain_request struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param terrain_request C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_terrain_request_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_terrain_request_t* terrain_request)
-{
-    return mavlink_msg_terrain_request_pack_status(system_id, component_id, _status, msg,  terrain_request->lat, terrain_request->lon, terrain_request->grid_spacing, terrain_request->mask);
 }
 
 /**
@@ -250,7 +259,7 @@ static inline void mavlink_msg_terrain_request_send_struct(mavlink_channel_t cha
 
 #if MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -331,14 +340,48 @@ static inline uint64_t mavlink_msg_terrain_request_get_mask(const mavlink_messag
  */
 static inline void mavlink_msg_terrain_request_decode(const mavlink_message_t* msg, mavlink_terrain_request_t* terrain_request)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     terrain_request->mask = mavlink_msg_terrain_request_get_mask(msg);
     terrain_request->lat = mavlink_msg_terrain_request_get_lat(msg);
     terrain_request->lon = mavlink_msg_terrain_request_get_lon(msg);
     terrain_request->grid_spacing = mavlink_msg_terrain_request_get_grid_spacing(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN? msg->len : MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN;
-        memset(terrain_request, 0, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
-    memcpy(terrain_request, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN? msg->len : MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN;
+    memset(terrain_request, 0, MAVLINK_MSG_ID_TERRAIN_REQUEST_LEN);
+    memcpy(terrain_request, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(terrain_request, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

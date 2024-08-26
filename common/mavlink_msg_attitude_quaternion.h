@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE ATTITUDE_QUATERNION PACKING
 
 #define MAVLINK_MSG_ID_ATTITUDE_QUATERNION 31
@@ -79,6 +85,26 @@ typedef struct __mavlink_attitude_quaternion_t {
 static inline uint16_t mavlink_msg_attitude_quaternion_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, float q1, float q2, float q3, float q4, float rollspeed, float pitchspeed, float yawspeed, const float *repr_offset_q)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -102,66 +128,20 @@ static inline uint16_t mavlink_msg_attitude_quaternion_pack(uint8_t system_id, u
     packet.pitchspeed = pitchspeed;
     packet.yawspeed = yawspeed;
     mav_array_memcpy(packet.repr_offset_q, repr_offset_q, sizeof(float)*4);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_attitude_quaternion_t* attitude_quaternion_final = (mavlink_attitude_quaternion_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), attitude_quaternion_final, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_ATTITUDE_QUATERNION;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_MIN_LEN, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_CRC);
-}
-
-/**
- * @brief Pack a attitude_quaternion message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param q1  Quaternion component 1, w (1 in null-rotation)
- * @param q2  Quaternion component 2, x (0 in null-rotation)
- * @param q3  Quaternion component 3, y (0 in null-rotation)
- * @param q4  Quaternion component 4, z (0 in null-rotation)
- * @param rollspeed [rad/s] Roll angular speed
- * @param pitchspeed [rad/s] Pitch angular speed
- * @param yawspeed [rad/s] Yaw angular speed
- * @param repr_offset_q  Rotation offset by which the attitude quaternion and angular speed vector should be rotated for user display (quaternion with [w, x, y, z] order, zero-rotation is [1, 0, 0, 0], send [0, 0, 0, 0] if field not supported). This field is intended for systems in which the reference attitude may change during flight. For example, tailsitters VTOLs rotate their reference attitude by 90 degrees between hover mode and fixed wing mode, thus repr_offset_q is equal to [1, 0, 0, 0] in hover mode and equal to [0.7071, 0, 0.7071, 0] in fixed wing mode.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_attitude_quaternion_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, float q1, float q2, float q3, float q4, float rollspeed, float pitchspeed, float yawspeed, const float *repr_offset_q)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_float(buf, 4, q1);
-    _mav_put_float(buf, 8, q2);
-    _mav_put_float(buf, 12, q3);
-    _mav_put_float(buf, 16, q4);
-    _mav_put_float(buf, 20, rollspeed);
-    _mav_put_float(buf, 24, pitchspeed);
-    _mav_put_float(buf, 28, yawspeed);
-    _mav_put_float_array(buf, 32, repr_offset_q, 4);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
-#else
-    mavlink_attitude_quaternion_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.q1 = q1;
-    packet.q2 = q2;
-    packet.q3 = q3;
-    packet.q4 = q4;
-    packet.rollspeed = rollspeed;
-    packet.pitchspeed = pitchspeed;
-    packet.yawspeed = yawspeed;
-    mav_array_memcpy(packet.repr_offset_q, repr_offset_q, sizeof(float)*4);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_ATTITUDE_QUATERNION;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_MIN_LEN, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_MIN_LEN, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
-#endif
 }
 
 /**
@@ -185,6 +165,27 @@ static inline uint16_t mavlink_msg_attitude_quaternion_pack_chan(uint8_t system_
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,float q1,float q2,float q3,float q4,float rollspeed,float pitchspeed,float yawspeed,const float *repr_offset_q)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -208,7 +209,16 @@ static inline uint16_t mavlink_msg_attitude_quaternion_pack_chan(uint8_t system_
     packet.pitchspeed = pitchspeed;
     packet.yawspeed = yawspeed;
     mav_array_memcpy(packet.repr_offset_q, repr_offset_q, sizeof(float)*4);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_attitude_quaternion_t* attitude_quaternion_final = (mavlink_attitude_quaternion_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), attitude_quaternion_final, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_ATTITUDE_QUATERNION;
@@ -240,20 +250,6 @@ static inline uint16_t mavlink_msg_attitude_quaternion_encode(uint8_t system_id,
 static inline uint16_t mavlink_msg_attitude_quaternion_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_attitude_quaternion_t* attitude_quaternion)
 {
     return mavlink_msg_attitude_quaternion_pack_chan(system_id, component_id, chan, msg, attitude_quaternion->time_boot_ms, attitude_quaternion->q1, attitude_quaternion->q2, attitude_quaternion->q3, attitude_quaternion->q4, attitude_quaternion->rollspeed, attitude_quaternion->pitchspeed, attitude_quaternion->yawspeed, attitude_quaternion->repr_offset_q);
-}
-
-/**
- * @brief Encode a attitude_quaternion struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param attitude_quaternion C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_attitude_quaternion_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_attitude_quaternion_t* attitude_quaternion)
-{
-    return mavlink_msg_attitude_quaternion_pack_status(system_id, component_id, _status, msg,  attitude_quaternion->time_boot_ms, attitude_quaternion->q1, attitude_quaternion->q2, attitude_quaternion->q3, attitude_quaternion->q4, attitude_quaternion->rollspeed, attitude_quaternion->pitchspeed, attitude_quaternion->yawspeed, attitude_quaternion->repr_offset_q);
 }
 
 /**
@@ -317,7 +313,7 @@ static inline void mavlink_msg_attitude_quaternion_send_struct(mavlink_channel_t
 
 #if MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -456,6 +452,26 @@ static inline uint16_t mavlink_msg_attitude_quaternion_get_repr_offset_q(const m
  */
 static inline void mavlink_msg_attitude_quaternion_decode(const mavlink_message_t* msg, mavlink_attitude_quaternion_t* attitude_quaternion)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     attitude_quaternion->time_boot_ms = mavlink_msg_attitude_quaternion_get_time_boot_ms(msg);
     attitude_quaternion->q1 = mavlink_msg_attitude_quaternion_get_q1(msg);
@@ -467,8 +483,22 @@ static inline void mavlink_msg_attitude_quaternion_decode(const mavlink_message_
     attitude_quaternion->yawspeed = mavlink_msg_attitude_quaternion_get_yawspeed(msg);
     mavlink_msg_attitude_quaternion_get_repr_offset_q(msg, attitude_quaternion->repr_offset_q);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN? msg->len : MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN;
-        memset(attitude_quaternion, 0, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
-    memcpy(attitude_quaternion, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN? msg->len : MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN;
+    memset(attitude_quaternion, 0, MAVLINK_MSG_ID_ATTITUDE_QUATERNION_LEN);
+    memcpy(attitude_quaternion, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(attitude_quaternion, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

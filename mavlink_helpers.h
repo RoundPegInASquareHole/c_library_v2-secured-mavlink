@@ -6,6 +6,8 @@
 #include "mavlink_conversions.h"
 #include <stdio.h>
 
+#include "chacha20.h"
+
 #ifndef MAVLINK_HELPER
 #define MAVLINK_HELPER
 #endif
@@ -66,7 +68,6 @@ MAVLINK_HELPER void mavlink_reset_channel_status(uint8_t chan)
 	status->parse_state = MAVLINK_PARSE_STATE_IDLE;
 }
 
-#ifndef MAVLINK_NO_SIGN_PACKET
 /**
  * @brief create a signature block for a packet
  */
@@ -99,7 +100,6 @@ MAVLINK_HELPER uint8_t mavlink_sign_packet(mavlink_signing_t *signing,
 	
 	return MAVLINK_SIGNATURE_BLOCK_LEN;
 }
-#endif
 
 /**
  * @brief Trim payload of any trailing zero-populated bytes (MAVLink 2 only).
@@ -116,7 +116,6 @@ MAVLINK_HELPER uint8_t _mav_trim_payload(const char *payload, uint8_t length)
 	return length;
 }
 
-#ifndef MAVLINK_NO_SIGNATURE_CHECK
 /**
  * @brief check a signature block for a packet
  */
@@ -136,13 +135,11 @@ MAVLINK_HELPER bool mavlink_signature_check(mavlink_signing_t *signing,
         
 	mavlink_sha256_init(&ctx);
 	mavlink_sha256_update(&ctx, signing->secret_key, sizeof(signing->secret_key));
-	mavlink_sha256_update(&ctx, p, MAVLINK_NUM_HEADER_BYTES);
-	mavlink_sha256_update(&ctx, _MAV_PAYLOAD(msg), msg->len);
+	mavlink_sha256_update(&ctx, p, MAVLINK_CORE_HEADER_LEN+1+msg->len);
 	mavlink_sha256_update(&ctx, msg->ck, 2);
 	mavlink_sha256_update(&ctx, psig, 1+6);
 	mavlink_sha256_final_48(&ctx, signature);
-        if (memcmp(signature, incoming_signature, 6) != 0) {
-                signing->last_status = MAVLINK_SIGNING_STATUS_BAD_SIGNATURE;
+	if (memcmp(signature, incoming_signature, 6) != 0) {
 		return false;
 	}
 
@@ -156,8 +153,7 @@ MAVLINK_HELPER bool mavlink_signature_check(mavlink_signing_t *signing,
 	memcpy(tstamp.t8, psig+1, 6);
 
 	if (signing_streams == NULL) {
-                signing->last_status = MAVLINK_SIGNING_STATUS_NO_STREAMS;
-                return false;
+		return false;
 	}
 	
 	// find stream
@@ -171,13 +167,11 @@ MAVLINK_HELPER bool mavlink_signature_check(mavlink_signing_t *signing,
 	if (i == signing_streams->num_signing_streams) {
 		if (signing_streams->num_signing_streams >= MAVLINK_MAX_SIGNING_STREAMS) {
 			// over max number of streams
-                        signing->last_status = MAVLINK_SIGNING_STATUS_TOO_MANY_STREAMS;
-                        return false;
+			return false;
 		}
 		// new stream. Only accept if timestamp is not more than 1 minute old
 		if (tstamp.t64 + 6000*1000UL < signing->timestamp) {
-                        signing->last_status = MAVLINK_SIGNING_STATUS_OLD_TIMESTAMP;
-                        return false;
+			return false;
 		}
 		// add new stream
 		signing_streams->stream[i].sysid = msg->sysid;
@@ -190,8 +184,7 @@ MAVLINK_HELPER bool mavlink_signature_check(mavlink_signing_t *signing,
 		memcpy(last_tstamp.t8, signing_streams->stream[i].timestamp_bytes, 6);
 		if (tstamp.t64 <= last_tstamp.t64) {
 			// repeating old timestamp
-                        signing->last_status = MAVLINK_SIGNING_STATUS_REPLAY;
-                        return false;
+			return false;
 		}
 	}
 
@@ -202,10 +195,8 @@ MAVLINK_HELPER bool mavlink_signature_check(mavlink_signing_t *signing,
 	if (tstamp.t64 > signing->timestamp) {
 		signing->timestamp = tstamp.t64;
 	}
-        signing->last_status = MAVLINK_SIGNING_STATUS_OK;
-        return true;
+	return true;
 }
-#endif
 
 
 /**
@@ -224,11 +215,7 @@ MAVLINK_HELPER uint16_t mavlink_finalize_message_buffer(mavlink_message_t* msg, 
 						      mavlink_status_t* status, uint8_t min_length, uint8_t length, uint8_t crc_extra)
 {
 	bool mavlink1 = (status->flags & MAVLINK_STATUS_FLAG_OUT_MAVLINK1) != 0;
-#ifndef MAVLINK_NO_SIGN_PACKET
 	bool signing = 	(!mavlink1) && status->signing && (status->signing->flags & MAVLINK_SIGNING_FLAG_SIGN_OUTGOING);
-#else
-	bool signing = false;
-#endif
 	uint8_t signature_len = signing? MAVLINK_SIGNATURE_BLOCK_LEN : 0;
         uint8_t header_len = MAVLINK_CORE_HEADER_LEN+1;
 	uint8_t buf[MAVLINK_CORE_HEADER_LEN+1];
@@ -276,7 +263,6 @@ MAVLINK_HELPER uint16_t mavlink_finalize_message_buffer(mavlink_message_t* msg, 
 
 	msg->checksum = checksum;
 
-#ifndef MAVLINK_NO_SIGN_PACKET
 	if (signing) {
 		mavlink_sign_packet(status->signing,
 				    msg->signature,
@@ -284,8 +270,7 @@ MAVLINK_HELPER uint16_t mavlink_finalize_message_buffer(mavlink_message_t* msg, 
 				    (const uint8_t *)_MAV_PAYLOAD(msg), msg->len,
 				    (const uint8_t *)_MAV_PAYLOAD(msg)+(uint16_t)msg->len);
 	}
-#endif
-
+	
 	return msg->len + header_len + 2 + signature_len;
 }
 
@@ -330,55 +315,90 @@ MAVLINK_HELPER void _mav_finalize_message_chan_send(mavlink_channel_t chan, uint
 	bool mavlink1 = (status->flags & MAVLINK_STATUS_FLAG_OUT_MAVLINK1) != 0;
 	bool signing = 	(!mavlink1) && status->signing && (status->signing->flags & MAVLINK_SIGNING_FLAG_SIGN_OUTGOING);
 
-        if (mavlink1) {
-            length = min_length;
-            if (msgid > 255) {
-                // can't send 16 bit messages
-                _mav_parse_error(status);
-                return;
-            }
-            header_len = MAVLINK_CORE_HEADER_MAVLINK1_LEN;
-            buf[0] = MAVLINK_STX_MAVLINK1;
-            buf[1] = length;
-            buf[2] = status->current_tx_seq;
-            buf[3] = mavlink_system.sysid;
-            buf[4] = mavlink_system.compid;
-            buf[5] = msgid & 0xFF;
-        } else {
-	    uint8_t incompat_flags = 0;
-	    if (signing) {
-		incompat_flags |= MAVLINK_IFLAG_SIGNED;
-	    }
-            length = _mav_trim_payload(packet, length);
-            buf[0] = MAVLINK_STX;
-            buf[1] = length;
-            buf[2] = incompat_flags;
-            buf[3] = 0; // compat_flags
-            buf[4] = status->current_tx_seq;
-            buf[5] = mavlink_system.sysid;
-            buf[6] = mavlink_system.compid;
-            buf[7] = msgid & 0xFF;
-            buf[8] = (msgid >> 8) & 0xFF;
-            buf[9] = (msgid >> 16) & 0xFF;
-        }
+	if (mavlink1) {
+		length = min_length;
+		if (msgid > 255) {
+			// can't send 16 bit messages
+			_mav_parse_error(status);
+			return;
+		}
+		header_len = MAVLINK_CORE_HEADER_MAVLINK1_LEN;
+		buf[0] = MAVLINK_STX_MAVLINK1;
+		buf[1] = length;
+		buf[2] = status->current_tx_seq;
+		buf[3] = mavlink_system.sysid;
+		buf[4] = mavlink_system.compid;
+		buf[5] = msgid & 0xFF;
+	} else {
+	uint8_t incompat_flags = 0;
+	if (signing) {
+	incompat_flags |= MAVLINK_IFLAG_SIGNED;
+	}
+		length = _mav_trim_payload(packet, length);
+		buf[0] = MAVLINK_STX;
+		buf[1] = length;
+		buf[2] = incompat_flags;
+		buf[3] = 0; // compat_flags
+		buf[4] = status->current_tx_seq;
+		buf[5] = mavlink_system.sysid;
+		buf[6] = mavlink_system.compid;
+		buf[7] = msgid & 0xFF;
+		buf[8] = (msgid >> 8) & 0xFF;
+		buf[9] = (msgid >> 16) & 0xFF;
+	}
+
+	// printf("Header:\n");
+	// hex_print(buf, 0,header_len+1);
+	// printf("The length is %d\n", length);
+	// printf("Original data sent from GCS:\n");    
+	// hex_print((uint8_t *)packet, 0,length);
+
+	// printf("\n================ ChaCha20 ================\n");
+
+	/// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+	// 256-bit key
+	uint8_t chacha20_key[] = {
+		0x00, 0x01, 0x02, 0x03,
+		0x04, 0x05, 0x06, 0x07,
+		0x08, 0x09, 0x0a, 0x0b,
+		0x0c, 0x0d, 0x0e, 0x0f,
+		0x10, 0x11, 0x12, 0x13,
+		0x14, 0x15, 0x16, 0x17,
+		0x18, 0x19, 0x1a, 0x1b,
+		0x1c, 0x1d, 0x1e, 0x1f
+	};
+
+	// 96-bit nonce
+	uint8_t nonce[] = {
+		0x00, 0x00, 0x00, 0x00, 
+		0x00, 0x00, 0x00, 0x4a, 
+		0x00, 0x00, 0x00, 0x00
+	};
+
+	uint8_t encrypt[length];
+	ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet, (uint8_t *)encrypt, length);
+
+	// printf("Encrypted data:\n"); 
+	// hex_print((uint8_t *)encrypt, 0,length);
+
+	// printf("\n============== ChaCha20 DONE ==============\n");
+
 	status->current_tx_seq++;
 	checksum = crc_calculate((const uint8_t*)&buf[1], header_len);
-	crc_accumulate_buffer(&checksum, packet, length);
+	crc_accumulate_buffer(&checksum, (const char *)encrypt, length);
 	crc_accumulate(crc_extra, &checksum);
 	ck[0] = (uint8_t)(checksum & 0xFF);
 	ck[1] = (uint8_t)(checksum >> 8);
 
-#ifndef MAVLINK_NO_SIGN_PACKET
 	if (signing) {
 		// possibly add a signature
 		signature_len = mavlink_sign_packet(status->signing, signature, buf, header_len+1,
-						    (const uint8_t *)packet, length, ck);
+						    (const uint8_t *)encrypt, length, ck);
 	}
-#endif
-
+	
 	MAVLINK_START_UART_SEND(chan, header_len + 3 + (uint16_t)length + (uint16_t)signature_len);
 	_mavlink_send_uart(chan, (const char *)buf, header_len+1);
-	_mavlink_send_uart(chan, packet, length);
+	_mavlink_send_uart(chan, (const char *)encrypt, length);
 	_mavlink_send_uart(chan, (const char *)ck, 2);
 	if (signature_len != 0) {
 		_mavlink_send_uart(chan, (const char *)signature, signature_len);
@@ -593,6 +613,7 @@ MAVLINK_HELPER uint8_t mavlink_frame_char_buffer(mavlink_message_t* rxmsg,
                                                  mavlink_message_t* r_message, 
                                                  mavlink_status_t* r_mavlink_status)
 {
+	int bufferIndex = 0;
 
 	status->msg_received = MAVLINK_FRAMING_INCOMPLETE;
 
@@ -707,7 +728,7 @@ MAVLINK_HELPER uint8_t mavlink_frame_char_buffer(mavlink_message_t* rxmsg,
 		break;
 
 	case MAVLINK_PARSE_STATE_GOT_MSGID1:
-		rxmsg->msgid |= ((uint32_t)c)<<8;
+		rxmsg->msgid |= c<<8;
 		mavlink_update_checksum(rxmsg, c);
 		status->parse_state = MAVLINK_PARSE_STATE_GOT_MSGID2;
 		break;
@@ -799,11 +820,7 @@ MAVLINK_HELPER uint8_t mavlink_frame_char_buffer(mavlink_message_t* rxmsg,
 		status->signature_wait--;
 		if (status->signature_wait == 0) {
 			// we have the whole signature, check it is OK
-#ifndef MAVLINK_NO_SIGNATURE_CHECK
 			bool sig_ok = mavlink_signature_check(status->signing, status->signing_streams, rxmsg);
-#else
-			bool sig_ok = true;
-#endif
 			if (!sig_ok &&
 			   	(status->signing->accept_unsigned_callback &&
 			   	 status->signing->accept_unsigned_callback(status, rxmsg->msgid))) {
@@ -823,7 +840,8 @@ MAVLINK_HELPER uint8_t mavlink_frame_char_buffer(mavlink_message_t* rxmsg,
 		break;
 	}
 
-	// If a message has been successfully decoded, check index
+	bufferIndex++;
+	// If a message has been sucessfully decoded, check index
 	if (status->msg_received == MAVLINK_FRAMING_OK)
 	{
 		//while(status->current_seq != rxmsg->seq)

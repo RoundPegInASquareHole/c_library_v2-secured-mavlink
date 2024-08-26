@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE LINK_NODE_STATUS PACKING
 
 #define MAVLINK_MSG_ID_LINK_NODE_STATUS 8
@@ -87,6 +93,26 @@ typedef struct __mavlink_link_node_status_t {
 static inline uint16_t mavlink_msg_link_node_status_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint64_t timestamp, uint8_t tx_buf, uint8_t rx_buf, uint32_t tx_rate, uint32_t rx_rate, uint16_t rx_parse_err, uint16_t tx_overflows, uint16_t rx_overflows, uint32_t messages_sent, uint32_t messages_received, uint32_t messages_lost)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN];
     _mav_put_uint64_t(buf, 0, timestamp);
@@ -116,74 +142,20 @@ static inline uint16_t mavlink_msg_link_node_status_pack(uint8_t system_id, uint
     packet.tx_buf = tx_buf;
     packet.rx_buf = rx_buf;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_link_node_status_t* link_node_status_final = (mavlink_link_node_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), link_node_status_final, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_LINK_NODE_STATUS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_LINK_NODE_STATUS_MIN_LEN, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN, MAVLINK_MSG_ID_LINK_NODE_STATUS_CRC);
-}
-
-/**
- * @brief Pack a link_node_status message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param timestamp [ms] Timestamp (time since system boot).
- * @param tx_buf [%] Remaining free transmit buffer space
- * @param rx_buf [%] Remaining free receive buffer space
- * @param tx_rate [bytes/s] Transmit rate
- * @param rx_rate [bytes/s] Receive rate
- * @param rx_parse_err [bytes] Number of bytes that could not be parsed correctly.
- * @param tx_overflows [bytes] Transmit buffer overflows. This number wraps around as it reaches UINT16_MAX
- * @param rx_overflows [bytes] Receive buffer overflows. This number wraps around as it reaches UINT16_MAX
- * @param messages_sent  Messages sent
- * @param messages_received  Messages received (estimated from counting seq)
- * @param messages_lost  Messages lost (estimated from counting seq)
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_link_node_status_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint64_t timestamp, uint8_t tx_buf, uint8_t rx_buf, uint32_t tx_rate, uint32_t rx_rate, uint16_t rx_parse_err, uint16_t tx_overflows, uint16_t rx_overflows, uint32_t messages_sent, uint32_t messages_received, uint32_t messages_lost)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN];
-    _mav_put_uint64_t(buf, 0, timestamp);
-    _mav_put_uint32_t(buf, 8, tx_rate);
-    _mav_put_uint32_t(buf, 12, rx_rate);
-    _mav_put_uint32_t(buf, 16, messages_sent);
-    _mav_put_uint32_t(buf, 20, messages_received);
-    _mav_put_uint32_t(buf, 24, messages_lost);
-    _mav_put_uint16_t(buf, 28, rx_parse_err);
-    _mav_put_uint16_t(buf, 30, tx_overflows);
-    _mav_put_uint16_t(buf, 32, rx_overflows);
-    _mav_put_uint8_t(buf, 34, tx_buf);
-    _mav_put_uint8_t(buf, 35, rx_buf);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
-#else
-    mavlink_link_node_status_t packet;
-    packet.timestamp = timestamp;
-    packet.tx_rate = tx_rate;
-    packet.rx_rate = rx_rate;
-    packet.messages_sent = messages_sent;
-    packet.messages_received = messages_received;
-    packet.messages_lost = messages_lost;
-    packet.rx_parse_err = rx_parse_err;
-    packet.tx_overflows = tx_overflows;
-    packet.rx_overflows = rx_overflows;
-    packet.tx_buf = tx_buf;
-    packet.rx_buf = rx_buf;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_LINK_NODE_STATUS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_LINK_NODE_STATUS_MIN_LEN, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN, MAVLINK_MSG_ID_LINK_NODE_STATUS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_LINK_NODE_STATUS_MIN_LEN, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
-#endif
 }
 
 /**
@@ -209,6 +181,27 @@ static inline uint16_t mavlink_msg_link_node_status_pack_chan(uint8_t system_id,
                                mavlink_message_t* msg,
                                    uint64_t timestamp,uint8_t tx_buf,uint8_t rx_buf,uint32_t tx_rate,uint32_t rx_rate,uint16_t rx_parse_err,uint16_t tx_overflows,uint16_t rx_overflows,uint32_t messages_sent,uint32_t messages_received,uint32_t messages_lost)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN];
     _mav_put_uint64_t(buf, 0, timestamp);
@@ -238,7 +231,16 @@ static inline uint16_t mavlink_msg_link_node_status_pack_chan(uint8_t system_id,
     packet.tx_buf = tx_buf;
     packet.rx_buf = rx_buf;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_link_node_status_t* link_node_status_final = (mavlink_link_node_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), link_node_status_final, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_LINK_NODE_STATUS;
@@ -270,20 +272,6 @@ static inline uint16_t mavlink_msg_link_node_status_encode(uint8_t system_id, ui
 static inline uint16_t mavlink_msg_link_node_status_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_link_node_status_t* link_node_status)
 {
     return mavlink_msg_link_node_status_pack_chan(system_id, component_id, chan, msg, link_node_status->timestamp, link_node_status->tx_buf, link_node_status->rx_buf, link_node_status->tx_rate, link_node_status->rx_rate, link_node_status->rx_parse_err, link_node_status->tx_overflows, link_node_status->rx_overflows, link_node_status->messages_sent, link_node_status->messages_received, link_node_status->messages_lost);
-}
-
-/**
- * @brief Encode a link_node_status struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param link_node_status C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_link_node_status_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_link_node_status_t* link_node_status)
-{
-    return mavlink_msg_link_node_status_pack_status(system_id, component_id, _status, msg,  link_node_status->timestamp, link_node_status->tx_buf, link_node_status->rx_buf, link_node_status->tx_rate, link_node_status->rx_rate, link_node_status->rx_parse_err, link_node_status->tx_overflows, link_node_status->rx_overflows, link_node_status->messages_sent, link_node_status->messages_received, link_node_status->messages_lost);
 }
 
 /**
@@ -355,7 +343,7 @@ static inline void mavlink_msg_link_node_status_send_struct(mavlink_channel_t ch
 
 #if MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -520,6 +508,26 @@ static inline uint32_t mavlink_msg_link_node_status_get_messages_lost(const mavl
  */
 static inline void mavlink_msg_link_node_status_decode(const mavlink_message_t* msg, mavlink_link_node_status_t* link_node_status)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     link_node_status->timestamp = mavlink_msg_link_node_status_get_timestamp(msg);
     link_node_status->tx_rate = mavlink_msg_link_node_status_get_tx_rate(msg);
@@ -533,8 +541,22 @@ static inline void mavlink_msg_link_node_status_decode(const mavlink_message_t* 
     link_node_status->tx_buf = mavlink_msg_link_node_status_get_tx_buf(msg);
     link_node_status->rx_buf = mavlink_msg_link_node_status_get_rx_buf(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN? msg->len : MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN;
-        memset(link_node_status, 0, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
-    memcpy(link_node_status, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN? msg->len : MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN;
+    memset(link_node_status, 0, MAVLINK_MSG_ID_LINK_NODE_STATUS_LEN);
+    memcpy(link_node_status, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(link_node_status, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

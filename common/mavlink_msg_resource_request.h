@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE RESOURCE_REQUEST PACKING
 
 #define MAVLINK_MSG_ID_RESOURCE_REQUEST 142
@@ -64,6 +70,26 @@ typedef struct __mavlink_resource_request_t {
 static inline uint16_t mavlink_msg_resource_request_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t request_id, uint8_t uri_type, const uint8_t *uri, uint8_t transfer_type, const uint8_t *storage)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN];
     _mav_put_uint8_t(buf, 0, request_id);
@@ -79,54 +105,20 @@ static inline uint16_t mavlink_msg_resource_request_pack(uint8_t system_id, uint
     packet.transfer_type = transfer_type;
     mav_array_memcpy(packet.uri, uri, sizeof(uint8_t)*120);
     mav_array_memcpy(packet.storage, storage, sizeof(uint8_t)*120);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_resource_request_t* resource_request_final = (mavlink_resource_request_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), resource_request_final, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_RESOURCE_REQUEST;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_RESOURCE_REQUEST_MIN_LEN, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN, MAVLINK_MSG_ID_RESOURCE_REQUEST_CRC);
-}
-
-/**
- * @brief Pack a resource_request message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param request_id  Request ID. This ID should be re-used when sending back URI contents
- * @param uri_type  The type of requested URI. 0 = a file via URL. 1 = a UAVCAN binary
- * @param uri  The requested unique resource identifier (URI). It is not necessarily a straight domain name (depends on the URI type enum)
- * @param transfer_type  The way the autopilot wants to receive the URI. 0 = MAVLink FTP. 1 = binary stream.
- * @param storage  The storage path the autopilot wants the URI to be stored in. Will only be valid if the transfer_type has a storage associated (e.g. MAVLink FTP).
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_resource_request_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t request_id, uint8_t uri_type, const uint8_t *uri, uint8_t transfer_type, const uint8_t *storage)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN];
-    _mav_put_uint8_t(buf, 0, request_id);
-    _mav_put_uint8_t(buf, 1, uri_type);
-    _mav_put_uint8_t(buf, 122, transfer_type);
-    _mav_put_uint8_t_array(buf, 2, uri, 120);
-    _mav_put_uint8_t_array(buf, 123, storage, 120);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
-#else
-    mavlink_resource_request_t packet;
-    packet.request_id = request_id;
-    packet.uri_type = uri_type;
-    packet.transfer_type = transfer_type;
-    mav_array_memcpy(packet.uri, uri, sizeof(uint8_t)*120);
-    mav_array_memcpy(packet.storage, storage, sizeof(uint8_t)*120);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_RESOURCE_REQUEST;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_RESOURCE_REQUEST_MIN_LEN, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN, MAVLINK_MSG_ID_RESOURCE_REQUEST_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_RESOURCE_REQUEST_MIN_LEN, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
-#endif
 }
 
 /**
@@ -146,6 +138,27 @@ static inline uint16_t mavlink_msg_resource_request_pack_chan(uint8_t system_id,
                                mavlink_message_t* msg,
                                    uint8_t request_id,uint8_t uri_type,const uint8_t *uri,uint8_t transfer_type,const uint8_t *storage)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN];
     _mav_put_uint8_t(buf, 0, request_id);
@@ -161,7 +174,16 @@ static inline uint16_t mavlink_msg_resource_request_pack_chan(uint8_t system_id,
     packet.transfer_type = transfer_type;
     mav_array_memcpy(packet.uri, uri, sizeof(uint8_t)*120);
     mav_array_memcpy(packet.storage, storage, sizeof(uint8_t)*120);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_resource_request_t* resource_request_final = (mavlink_resource_request_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), resource_request_final, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_RESOURCE_REQUEST;
@@ -193,20 +215,6 @@ static inline uint16_t mavlink_msg_resource_request_encode(uint8_t system_id, ui
 static inline uint16_t mavlink_msg_resource_request_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_resource_request_t* resource_request)
 {
     return mavlink_msg_resource_request_pack_chan(system_id, component_id, chan, msg, resource_request->request_id, resource_request->uri_type, resource_request->uri, resource_request->transfer_type, resource_request->storage);
-}
-
-/**
- * @brief Encode a resource_request struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param resource_request C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_resource_request_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_resource_request_t* resource_request)
-{
-    return mavlink_msg_resource_request_pack_status(system_id, component_id, _status, msg,  resource_request->request_id, resource_request->uri_type, resource_request->uri, resource_request->transfer_type, resource_request->storage);
 }
 
 /**
@@ -258,7 +266,7 @@ static inline void mavlink_msg_resource_request_send_struct(mavlink_channel_t ch
 
 #if MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -349,6 +357,26 @@ static inline uint16_t mavlink_msg_resource_request_get_storage(const mavlink_me
  */
 static inline void mavlink_msg_resource_request_decode(const mavlink_message_t* msg, mavlink_resource_request_t* resource_request)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     resource_request->request_id = mavlink_msg_resource_request_get_request_id(msg);
     resource_request->uri_type = mavlink_msg_resource_request_get_uri_type(msg);
@@ -356,8 +384,22 @@ static inline void mavlink_msg_resource_request_decode(const mavlink_message_t* 
     resource_request->transfer_type = mavlink_msg_resource_request_get_transfer_type(msg);
     mavlink_msg_resource_request_get_storage(msg, resource_request->storage);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN? msg->len : MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN;
-        memset(resource_request, 0, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
-    memcpy(resource_request, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN? msg->len : MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN;
+    memset(resource_request, 0, MAVLINK_MSG_ID_RESOURCE_REQUEST_LEN);
+    memcpy(resource_request, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(resource_request, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

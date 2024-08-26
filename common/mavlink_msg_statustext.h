@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE STATUSTEXT PACKING
 
 #define MAVLINK_MSG_ID_STATUSTEXT 253
@@ -59,6 +65,26 @@ typedef struct __mavlink_statustext_t {
 static inline uint16_t mavlink_msg_statustext_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t severity, const char *text, uint16_t id, uint8_t chunk_seq)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_STATUSTEXT_LEN];
     _mav_put_uint8_t(buf, 0, severity);
@@ -72,51 +98,20 @@ static inline uint16_t mavlink_msg_statustext_pack(uint8_t system_id, uint8_t co
     packet.id = id;
     packet.chunk_seq = chunk_seq;
     mav_array_memcpy(packet.text, text, sizeof(char)*50);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_STATUSTEXT_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_STATUSTEXT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_STATUSTEXT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_statustext_t* statustext_final = (mavlink_statustext_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), statustext_final, MAVLINK_MSG_ID_STATUSTEXT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_STATUSTEXT;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_STATUSTEXT_MIN_LEN, MAVLINK_MSG_ID_STATUSTEXT_LEN, MAVLINK_MSG_ID_STATUSTEXT_CRC);
-}
-
-/**
- * @brief Pack a statustext message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param severity  Severity of status. Relies on the definitions within RFC-5424.
- * @param text  Status text message, without null termination character
- * @param id  Unique (opaque) identifier for this statustext message.  May be used to reassemble a logical long-statustext message from a sequence of chunks.  A value of zero indicates this is the only chunk in the sequence and the message can be emitted immediately.
- * @param chunk_seq  This chunk's sequence number; indexing is from zero.  Any null character in the text field is taken to mean this was the last chunk.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_statustext_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t severity, const char *text, uint16_t id, uint8_t chunk_seq)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_STATUSTEXT_LEN];
-    _mav_put_uint8_t(buf, 0, severity);
-    _mav_put_uint16_t(buf, 51, id);
-    _mav_put_uint8_t(buf, 53, chunk_seq);
-    _mav_put_char_array(buf, 1, text, 50);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_STATUSTEXT_LEN);
-#else
-    mavlink_statustext_t packet;
-    packet.severity = severity;
-    packet.id = id;
-    packet.chunk_seq = chunk_seq;
-    mav_array_memcpy(packet.text, text, sizeof(char)*50);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_STATUSTEXT_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_STATUSTEXT;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_STATUSTEXT_MIN_LEN, MAVLINK_MSG_ID_STATUSTEXT_LEN, MAVLINK_MSG_ID_STATUSTEXT_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_STATUSTEXT_MIN_LEN, MAVLINK_MSG_ID_STATUSTEXT_LEN);
-#endif
 }
 
 /**
@@ -135,6 +130,27 @@ static inline uint16_t mavlink_msg_statustext_pack_chan(uint8_t system_id, uint8
                                mavlink_message_t* msg,
                                    uint8_t severity,const char *text,uint16_t id,uint8_t chunk_seq)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_STATUSTEXT_LEN];
     _mav_put_uint8_t(buf, 0, severity);
@@ -148,7 +164,16 @@ static inline uint16_t mavlink_msg_statustext_pack_chan(uint8_t system_id, uint8
     packet.id = id;
     packet.chunk_seq = chunk_seq;
     mav_array_memcpy(packet.text, text, sizeof(char)*50);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_STATUSTEXT_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_STATUSTEXT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_STATUSTEXT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_statustext_t* statustext_final = (mavlink_statustext_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), statustext_final, MAVLINK_MSG_ID_STATUSTEXT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_STATUSTEXT;
@@ -180,20 +205,6 @@ static inline uint16_t mavlink_msg_statustext_encode(uint8_t system_id, uint8_t 
 static inline uint16_t mavlink_msg_statustext_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_statustext_t* statustext)
 {
     return mavlink_msg_statustext_pack_chan(system_id, component_id, chan, msg, statustext->severity, statustext->text, statustext->id, statustext->chunk_seq);
-}
-
-/**
- * @brief Encode a statustext struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param statustext C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_statustext_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_statustext_t* statustext)
-{
-    return mavlink_msg_statustext_pack_status(system_id, component_id, _status, msg,  statustext->severity, statustext->text, statustext->id, statustext->chunk_seq);
 }
 
 /**
@@ -242,7 +253,7 @@ static inline void mavlink_msg_statustext_send_struct(mavlink_channel_t chan, co
 
 #if MAVLINK_MSG_ID_STATUSTEXT_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -321,14 +332,48 @@ static inline uint8_t mavlink_msg_statustext_get_chunk_seq(const mavlink_message
  */
 static inline void mavlink_msg_statustext_decode(const mavlink_message_t* msg, mavlink_statustext_t* statustext)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     statustext->severity = mavlink_msg_statustext_get_severity(msg);
     mavlink_msg_statustext_get_text(msg, statustext->text);
     statustext->id = mavlink_msg_statustext_get_id(msg);
     statustext->chunk_seq = mavlink_msg_statustext_get_chunk_seq(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_STATUSTEXT_LEN? msg->len : MAVLINK_MSG_ID_STATUSTEXT_LEN;
-        memset(statustext, 0, MAVLINK_MSG_ID_STATUSTEXT_LEN);
-    memcpy(statustext, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_STATUSTEXT_LEN? msg->len : MAVLINK_MSG_ID_STATUSTEXT_LEN;
+    memset(statustext, 0, MAVLINK_MSG_ID_STATUSTEXT_LEN);
+    memcpy(statustext, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(statustext, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

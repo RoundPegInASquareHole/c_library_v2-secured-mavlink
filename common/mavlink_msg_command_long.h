@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE COMMAND_LONG PACKING
 
 #define MAVLINK_MSG_ID_COMMAND_LONG 76
@@ -87,6 +93,26 @@ typedef struct __mavlink_command_long_t {
 static inline uint16_t mavlink_msg_command_long_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t target_system, uint8_t target_component, uint16_t command, uint8_t confirmation, float param1, float param2, float param3, float param4, float param5, float param6, float param7)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_COMMAND_LONG_LEN];
     _mav_put_float(buf, 0, param1);
@@ -116,74 +142,20 @@ static inline uint16_t mavlink_msg_command_long_pack(uint8_t system_id, uint8_t 
     packet.target_component = target_component;
     packet.confirmation = confirmation;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_COMMAND_LONG_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_command_long_t* command_long_final = (mavlink_command_long_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), command_long_final, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_COMMAND_LONG;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_COMMAND_LONG_MIN_LEN, MAVLINK_MSG_ID_COMMAND_LONG_LEN, MAVLINK_MSG_ID_COMMAND_LONG_CRC);
-}
-
-/**
- * @brief Pack a command_long message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param target_system  System which should execute the command
- * @param target_component  Component which should execute the command, 0 for all components
- * @param command  Command ID (of command to send).
- * @param confirmation  0: First transmission of this command. 1-255: Confirmation transmissions (e.g. for kill command)
- * @param param1  Parameter 1 (for the specific command).
- * @param param2  Parameter 2 (for the specific command).
- * @param param3  Parameter 3 (for the specific command).
- * @param param4  Parameter 4 (for the specific command).
- * @param param5  Parameter 5 (for the specific command).
- * @param param6  Parameter 6 (for the specific command).
- * @param param7  Parameter 7 (for the specific command).
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_command_long_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t target_system, uint8_t target_component, uint16_t command, uint8_t confirmation, float param1, float param2, float param3, float param4, float param5, float param6, float param7)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_COMMAND_LONG_LEN];
-    _mav_put_float(buf, 0, param1);
-    _mav_put_float(buf, 4, param2);
-    _mav_put_float(buf, 8, param3);
-    _mav_put_float(buf, 12, param4);
-    _mav_put_float(buf, 16, param5);
-    _mav_put_float(buf, 20, param6);
-    _mav_put_float(buf, 24, param7);
-    _mav_put_uint16_t(buf, 28, command);
-    _mav_put_uint8_t(buf, 30, target_system);
-    _mav_put_uint8_t(buf, 31, target_component);
-    _mav_put_uint8_t(buf, 32, confirmation);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
-#else
-    mavlink_command_long_t packet;
-    packet.param1 = param1;
-    packet.param2 = param2;
-    packet.param3 = param3;
-    packet.param4 = param4;
-    packet.param5 = param5;
-    packet.param6 = param6;
-    packet.param7 = param7;
-    packet.command = command;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-    packet.confirmation = confirmation;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_COMMAND_LONG;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_COMMAND_LONG_MIN_LEN, MAVLINK_MSG_ID_COMMAND_LONG_LEN, MAVLINK_MSG_ID_COMMAND_LONG_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_COMMAND_LONG_MIN_LEN, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
-#endif
 }
 
 /**
@@ -209,6 +181,27 @@ static inline uint16_t mavlink_msg_command_long_pack_chan(uint8_t system_id, uin
                                mavlink_message_t* msg,
                                    uint8_t target_system,uint8_t target_component,uint16_t command,uint8_t confirmation,float param1,float param2,float param3,float param4,float param5,float param6,float param7)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_COMMAND_LONG_LEN];
     _mav_put_float(buf, 0, param1);
@@ -238,7 +231,16 @@ static inline uint16_t mavlink_msg_command_long_pack_chan(uint8_t system_id, uin
     packet.target_component = target_component;
     packet.confirmation = confirmation;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_COMMAND_LONG_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_command_long_t* command_long_final = (mavlink_command_long_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), command_long_final, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_COMMAND_LONG;
@@ -270,20 +272,6 @@ static inline uint16_t mavlink_msg_command_long_encode(uint8_t system_id, uint8_
 static inline uint16_t mavlink_msg_command_long_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_command_long_t* command_long)
 {
     return mavlink_msg_command_long_pack_chan(system_id, component_id, chan, msg, command_long->target_system, command_long->target_component, command_long->command, command_long->confirmation, command_long->param1, command_long->param2, command_long->param3, command_long->param4, command_long->param5, command_long->param6, command_long->param7);
-}
-
-/**
- * @brief Encode a command_long struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param command_long C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_command_long_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_command_long_t* command_long)
-{
-    return mavlink_msg_command_long_pack_status(system_id, component_id, _status, msg,  command_long->target_system, command_long->target_component, command_long->command, command_long->confirmation, command_long->param1, command_long->param2, command_long->param3, command_long->param4, command_long->param5, command_long->param6, command_long->param7);
 }
 
 /**
@@ -355,7 +343,7 @@ static inline void mavlink_msg_command_long_send_struct(mavlink_channel_t chan, 
 
 #if MAVLINK_MSG_ID_COMMAND_LONG_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -520,6 +508,26 @@ static inline float mavlink_msg_command_long_get_param7(const mavlink_message_t*
  */
 static inline void mavlink_msg_command_long_decode(const mavlink_message_t* msg, mavlink_command_long_t* command_long)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     command_long->param1 = mavlink_msg_command_long_get_param1(msg);
     command_long->param2 = mavlink_msg_command_long_get_param2(msg);
@@ -533,8 +541,22 @@ static inline void mavlink_msg_command_long_decode(const mavlink_message_t* msg,
     command_long->target_component = mavlink_msg_command_long_get_target_component(msg);
     command_long->confirmation = mavlink_msg_command_long_get_confirmation(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_COMMAND_LONG_LEN? msg->len : MAVLINK_MSG_ID_COMMAND_LONG_LEN;
-        memset(command_long, 0, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
-    memcpy(command_long, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_COMMAND_LONG_LEN? msg->len : MAVLINK_MSG_ID_COMMAND_LONG_LEN;
+    memset(command_long, 0, MAVLINK_MSG_ID_COMMAND_LONG_LEN);
+    memcpy(command_long, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(command_long, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

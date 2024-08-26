@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE OPEN_DRONE_ID_BASIC_ID PACKING
 
 #define MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID 12900
@@ -68,6 +74,26 @@ typedef struct __mavlink_open_drone_id_basic_id_t {
 static inline uint16_t mavlink_msg_open_drone_id_basic_id_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t target_system, uint8_t target_component, const uint8_t *id_or_mac, uint8_t id_type, uint8_t ua_type, const uint8_t *uas_id)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN];
     _mav_put_uint8_t(buf, 0, target_system);
@@ -85,57 +111,20 @@ static inline uint16_t mavlink_msg_open_drone_id_basic_id_pack(uint8_t system_id
     packet.ua_type = ua_type;
     mav_array_memcpy(packet.id_or_mac, id_or_mac, sizeof(uint8_t)*20);
     mav_array_memcpy(packet.uas_id, uas_id, sizeof(uint8_t)*20);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_open_drone_id_basic_id_t* open_drone_id_basic_id_final = (mavlink_open_drone_id_basic_id_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), open_drone_id_basic_id_final, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_MIN_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_CRC);
-}
-
-/**
- * @brief Pack a open_drone_id_basic_id message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param target_system  System ID (0 for broadcast).
- * @param target_component  Component ID (0 for broadcast).
- * @param id_or_mac  Only used for drone ID data received from other UAs. See detailed description at https://mavlink.io/en/services/opendroneid.html. 
- * @param id_type  Indicates the format for the uas_id field of this message.
- * @param ua_type  Indicates the type of UA (Unmanned Aircraft).
- * @param uas_id  UAS (Unmanned Aircraft System) ID following the format specified by id_type. Shall be filled with nulls in the unused portion of the field.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_open_drone_id_basic_id_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t target_system, uint8_t target_component, const uint8_t *id_or_mac, uint8_t id_type, uint8_t ua_type, const uint8_t *uas_id)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN];
-    _mav_put_uint8_t(buf, 0, target_system);
-    _mav_put_uint8_t(buf, 1, target_component);
-    _mav_put_uint8_t(buf, 22, id_type);
-    _mav_put_uint8_t(buf, 23, ua_type);
-    _mav_put_uint8_t_array(buf, 2, id_or_mac, 20);
-    _mav_put_uint8_t_array(buf, 24, uas_id, 20);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
-#else
-    mavlink_open_drone_id_basic_id_t packet;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-    packet.id_type = id_type;
-    packet.ua_type = ua_type;
-    mav_array_memcpy(packet.id_or_mac, id_or_mac, sizeof(uint8_t)*20);
-    mav_array_memcpy(packet.uas_id, uas_id, sizeof(uint8_t)*20);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_MIN_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_MIN_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
-#endif
 }
 
 /**
@@ -156,6 +145,27 @@ static inline uint16_t mavlink_msg_open_drone_id_basic_id_pack_chan(uint8_t syst
                                mavlink_message_t* msg,
                                    uint8_t target_system,uint8_t target_component,const uint8_t *id_or_mac,uint8_t id_type,uint8_t ua_type,const uint8_t *uas_id)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN];
     _mav_put_uint8_t(buf, 0, target_system);
@@ -173,7 +183,16 @@ static inline uint16_t mavlink_msg_open_drone_id_basic_id_pack_chan(uint8_t syst
     packet.ua_type = ua_type;
     mav_array_memcpy(packet.id_or_mac, id_or_mac, sizeof(uint8_t)*20);
     mav_array_memcpy(packet.uas_id, uas_id, sizeof(uint8_t)*20);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_open_drone_id_basic_id_t* open_drone_id_basic_id_final = (mavlink_open_drone_id_basic_id_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), open_drone_id_basic_id_final, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID;
@@ -205,20 +224,6 @@ static inline uint16_t mavlink_msg_open_drone_id_basic_id_encode(uint8_t system_
 static inline uint16_t mavlink_msg_open_drone_id_basic_id_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_open_drone_id_basic_id_t* open_drone_id_basic_id)
 {
     return mavlink_msg_open_drone_id_basic_id_pack_chan(system_id, component_id, chan, msg, open_drone_id_basic_id->target_system, open_drone_id_basic_id->target_component, open_drone_id_basic_id->id_or_mac, open_drone_id_basic_id->id_type, open_drone_id_basic_id->ua_type, open_drone_id_basic_id->uas_id);
-}
-
-/**
- * @brief Encode a open_drone_id_basic_id struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param open_drone_id_basic_id C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_open_drone_id_basic_id_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_open_drone_id_basic_id_t* open_drone_id_basic_id)
-{
-    return mavlink_msg_open_drone_id_basic_id_pack_status(system_id, component_id, _status, msg,  open_drone_id_basic_id->target_system, open_drone_id_basic_id->target_component, open_drone_id_basic_id->id_or_mac, open_drone_id_basic_id->id_type, open_drone_id_basic_id->ua_type, open_drone_id_basic_id->uas_id);
 }
 
 /**
@@ -273,7 +278,7 @@ static inline void mavlink_msg_open_drone_id_basic_id_send_struct(mavlink_channe
 
 #if MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -376,6 +381,26 @@ static inline uint16_t mavlink_msg_open_drone_id_basic_id_get_uas_id(const mavli
  */
 static inline void mavlink_msg_open_drone_id_basic_id_decode(const mavlink_message_t* msg, mavlink_open_drone_id_basic_id_t* open_drone_id_basic_id)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     open_drone_id_basic_id->target_system = mavlink_msg_open_drone_id_basic_id_get_target_system(msg);
     open_drone_id_basic_id->target_component = mavlink_msg_open_drone_id_basic_id_get_target_component(msg);
@@ -384,8 +409,22 @@ static inline void mavlink_msg_open_drone_id_basic_id_decode(const mavlink_messa
     open_drone_id_basic_id->ua_type = mavlink_msg_open_drone_id_basic_id_get_ua_type(msg);
     mavlink_msg_open_drone_id_basic_id_get_uas_id(msg, open_drone_id_basic_id->uas_id);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN? msg->len : MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN;
-        memset(open_drone_id_basic_id, 0, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
-    memcpy(open_drone_id_basic_id, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN? msg->len : MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN;
+    memset(open_drone_id_basic_id, 0, MAVLINK_MSG_ID_OPEN_DRONE_ID_BASIC_ID_LEN);
+    memcpy(open_drone_id_basic_id, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(open_drone_id_basic_id, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

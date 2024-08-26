@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE UAVCAN_NODE_STATUS PACKING
 
 #define MAVLINK_MSG_ID_UAVCAN_NODE_STATUS 310
@@ -67,6 +73,26 @@ typedef struct __mavlink_uavcan_node_status_t {
 static inline uint16_t mavlink_msg_uavcan_node_status_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint64_t time_usec, uint32_t uptime_sec, uint8_t health, uint8_t mode, uint8_t sub_mode, uint16_t vendor_specific_status_code)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN];
     _mav_put_uint64_t(buf, 0, time_usec);
@@ -86,59 +112,20 @@ static inline uint16_t mavlink_msg_uavcan_node_status_pack(uint8_t system_id, ui
     packet.mode = mode;
     packet.sub_mode = sub_mode;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_uavcan_node_status_t* uavcan_node_status_final = (mavlink_uavcan_node_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), uavcan_node_status_final, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_UAVCAN_NODE_STATUS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_MIN_LEN, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_CRC);
-}
-
-/**
- * @brief Pack a uavcan_node_status message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_usec [us] Timestamp (UNIX Epoch time or time since system boot). The receiving end can infer timestamp format (since 1.1.1970 or since system boot) by checking for the magnitude of the number.
- * @param uptime_sec [s] Time since the start-up of the node.
- * @param health  Generalized node health status.
- * @param mode  Generalized operating mode.
- * @param sub_mode  Not used currently.
- * @param vendor_specific_status_code  Vendor-specific status information.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_uavcan_node_status_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint64_t time_usec, uint32_t uptime_sec, uint8_t health, uint8_t mode, uint8_t sub_mode, uint16_t vendor_specific_status_code)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN];
-    _mav_put_uint64_t(buf, 0, time_usec);
-    _mav_put_uint32_t(buf, 8, uptime_sec);
-    _mav_put_uint16_t(buf, 12, vendor_specific_status_code);
-    _mav_put_uint8_t(buf, 14, health);
-    _mav_put_uint8_t(buf, 15, mode);
-    _mav_put_uint8_t(buf, 16, sub_mode);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
-#else
-    mavlink_uavcan_node_status_t packet;
-    packet.time_usec = time_usec;
-    packet.uptime_sec = uptime_sec;
-    packet.vendor_specific_status_code = vendor_specific_status_code;
-    packet.health = health;
-    packet.mode = mode;
-    packet.sub_mode = sub_mode;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_UAVCAN_NODE_STATUS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_MIN_LEN, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_MIN_LEN, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
-#endif
 }
 
 /**
@@ -159,6 +146,27 @@ static inline uint16_t mavlink_msg_uavcan_node_status_pack_chan(uint8_t system_i
                                mavlink_message_t* msg,
                                    uint64_t time_usec,uint32_t uptime_sec,uint8_t health,uint8_t mode,uint8_t sub_mode,uint16_t vendor_specific_status_code)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN];
     _mav_put_uint64_t(buf, 0, time_usec);
@@ -178,7 +186,16 @@ static inline uint16_t mavlink_msg_uavcan_node_status_pack_chan(uint8_t system_i
     packet.mode = mode;
     packet.sub_mode = sub_mode;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_uavcan_node_status_t* uavcan_node_status_final = (mavlink_uavcan_node_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), uavcan_node_status_final, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_UAVCAN_NODE_STATUS;
@@ -210,20 +227,6 @@ static inline uint16_t mavlink_msg_uavcan_node_status_encode(uint8_t system_id, 
 static inline uint16_t mavlink_msg_uavcan_node_status_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_uavcan_node_status_t* uavcan_node_status)
 {
     return mavlink_msg_uavcan_node_status_pack_chan(system_id, component_id, chan, msg, uavcan_node_status->time_usec, uavcan_node_status->uptime_sec, uavcan_node_status->health, uavcan_node_status->mode, uavcan_node_status->sub_mode, uavcan_node_status->vendor_specific_status_code);
-}
-
-/**
- * @brief Encode a uavcan_node_status struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param uavcan_node_status C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_uavcan_node_status_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_uavcan_node_status_t* uavcan_node_status)
-{
-    return mavlink_msg_uavcan_node_status_pack_status(system_id, component_id, _status, msg,  uavcan_node_status->time_usec, uavcan_node_status->uptime_sec, uavcan_node_status->health, uavcan_node_status->mode, uavcan_node_status->sub_mode, uavcan_node_status->vendor_specific_status_code);
 }
 
 /**
@@ -280,7 +283,7 @@ static inline void mavlink_msg_uavcan_node_status_send_struct(mavlink_channel_t 
 
 #if MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -385,6 +388,26 @@ static inline uint16_t mavlink_msg_uavcan_node_status_get_vendor_specific_status
  */
 static inline void mavlink_msg_uavcan_node_status_decode(const mavlink_message_t* msg, mavlink_uavcan_node_status_t* uavcan_node_status)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     uavcan_node_status->time_usec = mavlink_msg_uavcan_node_status_get_time_usec(msg);
     uavcan_node_status->uptime_sec = mavlink_msg_uavcan_node_status_get_uptime_sec(msg);
@@ -393,8 +416,22 @@ static inline void mavlink_msg_uavcan_node_status_decode(const mavlink_message_t
     uavcan_node_status->mode = mavlink_msg_uavcan_node_status_get_mode(msg);
     uavcan_node_status->sub_mode = mavlink_msg_uavcan_node_status_get_sub_mode(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN? msg->len : MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN;
-        memset(uavcan_node_status, 0, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
-    memcpy(uavcan_node_status, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN? msg->len : MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN;
+    memset(uavcan_node_status, 0, MAVLINK_MSG_ID_UAVCAN_NODE_STATUS_LEN);
+    memcpy(uavcan_node_status, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(uavcan_node_status, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE MAG_CAL_PROGRESS PACKING
 
 #define MAVLINK_MSG_ID_MAG_CAL_PROGRESS 191
@@ -79,6 +85,26 @@ typedef struct __mavlink_mag_cal_progress_t {
 static inline uint16_t mavlink_msg_mag_cal_progress_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t compass_id, uint8_t cal_mask, uint8_t cal_status, uint8_t attempt, uint8_t completion_pct, const uint8_t *completion_mask, float direction_x, float direction_y, float direction_z)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN];
     _mav_put_float(buf, 0, direction_x);
@@ -102,66 +128,20 @@ static inline uint16_t mavlink_msg_mag_cal_progress_pack(uint8_t system_id, uint
     packet.attempt = attempt;
     packet.completion_pct = completion_pct;
     mav_array_memcpy(packet.completion_mask, completion_mask, sizeof(uint8_t)*10);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_mag_cal_progress_t* mag_cal_progress_final = (mavlink_mag_cal_progress_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), mag_cal_progress_final, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_MAG_CAL_PROGRESS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_MIN_LEN, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_CRC);
-}
-
-/**
- * @brief Pack a mag_cal_progress message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param compass_id  Compass being calibrated.
- * @param cal_mask  Bitmask of compasses being calibrated.
- * @param cal_status  Calibration Status.
- * @param attempt  Attempt number.
- * @param completion_pct [%] Completion percentage.
- * @param completion_mask  Bitmask of sphere sections (see http://en.wikipedia.org/wiki/Geodesic_grid).
- * @param direction_x  Body frame direction vector for display.
- * @param direction_y  Body frame direction vector for display.
- * @param direction_z  Body frame direction vector for display.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_mag_cal_progress_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t compass_id, uint8_t cal_mask, uint8_t cal_status, uint8_t attempt, uint8_t completion_pct, const uint8_t *completion_mask, float direction_x, float direction_y, float direction_z)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN];
-    _mav_put_float(buf, 0, direction_x);
-    _mav_put_float(buf, 4, direction_y);
-    _mav_put_float(buf, 8, direction_z);
-    _mav_put_uint8_t(buf, 12, compass_id);
-    _mav_put_uint8_t(buf, 13, cal_mask);
-    _mav_put_uint8_t(buf, 14, cal_status);
-    _mav_put_uint8_t(buf, 15, attempt);
-    _mav_put_uint8_t(buf, 16, completion_pct);
-    _mav_put_uint8_t_array(buf, 17, completion_mask, 10);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
-#else
-    mavlink_mag_cal_progress_t packet;
-    packet.direction_x = direction_x;
-    packet.direction_y = direction_y;
-    packet.direction_z = direction_z;
-    packet.compass_id = compass_id;
-    packet.cal_mask = cal_mask;
-    packet.cal_status = cal_status;
-    packet.attempt = attempt;
-    packet.completion_pct = completion_pct;
-    mav_array_memcpy(packet.completion_mask, completion_mask, sizeof(uint8_t)*10);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_MAG_CAL_PROGRESS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_MIN_LEN, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_MIN_LEN, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
-#endif
 }
 
 /**
@@ -185,6 +165,27 @@ static inline uint16_t mavlink_msg_mag_cal_progress_pack_chan(uint8_t system_id,
                                mavlink_message_t* msg,
                                    uint8_t compass_id,uint8_t cal_mask,uint8_t cal_status,uint8_t attempt,uint8_t completion_pct,const uint8_t *completion_mask,float direction_x,float direction_y,float direction_z)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN];
     _mav_put_float(buf, 0, direction_x);
@@ -208,7 +209,16 @@ static inline uint16_t mavlink_msg_mag_cal_progress_pack_chan(uint8_t system_id,
     packet.attempt = attempt;
     packet.completion_pct = completion_pct;
     mav_array_memcpy(packet.completion_mask, completion_mask, sizeof(uint8_t)*10);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_mag_cal_progress_t* mag_cal_progress_final = (mavlink_mag_cal_progress_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), mag_cal_progress_final, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_MAG_CAL_PROGRESS;
@@ -240,20 +250,6 @@ static inline uint16_t mavlink_msg_mag_cal_progress_encode(uint8_t system_id, ui
 static inline uint16_t mavlink_msg_mag_cal_progress_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_mag_cal_progress_t* mag_cal_progress)
 {
     return mavlink_msg_mag_cal_progress_pack_chan(system_id, component_id, chan, msg, mag_cal_progress->compass_id, mag_cal_progress->cal_mask, mag_cal_progress->cal_status, mag_cal_progress->attempt, mag_cal_progress->completion_pct, mag_cal_progress->completion_mask, mag_cal_progress->direction_x, mag_cal_progress->direction_y, mag_cal_progress->direction_z);
-}
-
-/**
- * @brief Encode a mag_cal_progress struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param mag_cal_progress C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_mag_cal_progress_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_mag_cal_progress_t* mag_cal_progress)
-{
-    return mavlink_msg_mag_cal_progress_pack_status(system_id, component_id, _status, msg,  mag_cal_progress->compass_id, mag_cal_progress->cal_mask, mag_cal_progress->cal_status, mag_cal_progress->attempt, mag_cal_progress->completion_pct, mag_cal_progress->completion_mask, mag_cal_progress->direction_x, mag_cal_progress->direction_y, mag_cal_progress->direction_z);
 }
 
 /**
@@ -317,7 +313,7 @@ static inline void mavlink_msg_mag_cal_progress_send_struct(mavlink_channel_t ch
 
 #if MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -456,6 +452,26 @@ static inline float mavlink_msg_mag_cal_progress_get_direction_z(const mavlink_m
  */
 static inline void mavlink_msg_mag_cal_progress_decode(const mavlink_message_t* msg, mavlink_mag_cal_progress_t* mag_cal_progress)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     mag_cal_progress->direction_x = mavlink_msg_mag_cal_progress_get_direction_x(msg);
     mag_cal_progress->direction_y = mavlink_msg_mag_cal_progress_get_direction_y(msg);
@@ -467,8 +483,22 @@ static inline void mavlink_msg_mag_cal_progress_decode(const mavlink_message_t* 
     mag_cal_progress->completion_pct = mavlink_msg_mag_cal_progress_get_completion_pct(msg);
     mavlink_msg_mag_cal_progress_get_completion_mask(msg, mag_cal_progress->completion_mask);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN? msg->len : MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN;
-        memset(mag_cal_progress, 0, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
-    memcpy(mag_cal_progress, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN? msg->len : MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN;
+    memset(mag_cal_progress, 0, MAVLINK_MSG_ID_MAG_CAL_PROGRESS_LEN);
+    memcpy(mag_cal_progress, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(mag_cal_progress, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

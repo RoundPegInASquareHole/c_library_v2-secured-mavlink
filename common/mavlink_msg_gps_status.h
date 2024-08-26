@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE GPS_STATUS PACKING
 
 #define MAVLINK_MSG_ID_GPS_STATUS 25
@@ -71,6 +77,26 @@ typedef struct __mavlink_gps_status_t {
 static inline uint16_t mavlink_msg_gps_status_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t satellites_visible, const uint8_t *satellite_prn, const uint8_t *satellite_used, const uint8_t *satellite_elevation, const uint8_t *satellite_azimuth, const uint8_t *satellite_snr)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GPS_STATUS_LEN];
     _mav_put_uint8_t(buf, 0, satellites_visible);
@@ -88,57 +114,20 @@ static inline uint16_t mavlink_msg_gps_status_pack(uint8_t system_id, uint8_t co
     mav_array_memcpy(packet.satellite_elevation, satellite_elevation, sizeof(uint8_t)*20);
     mav_array_memcpy(packet.satellite_azimuth, satellite_azimuth, sizeof(uint8_t)*20);
     mav_array_memcpy(packet.satellite_snr, satellite_snr, sizeof(uint8_t)*20);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GPS_STATUS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GPS_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GPS_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gps_status_t* gps_status_final = (mavlink_gps_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gps_status_final, MAVLINK_MSG_ID_GPS_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GPS_STATUS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_GPS_STATUS_MIN_LEN, MAVLINK_MSG_ID_GPS_STATUS_LEN, MAVLINK_MSG_ID_GPS_STATUS_CRC);
-}
-
-/**
- * @brief Pack a gps_status message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param satellites_visible  Number of satellites visible
- * @param satellite_prn  Global satellite ID
- * @param satellite_used  0: Satellite not used, 1: used for localization
- * @param satellite_elevation [deg] Elevation (0: right on top of receiver, 90: on the horizon) of satellite
- * @param satellite_azimuth [deg] Direction of satellite, 0: 0 deg, 255: 360 deg.
- * @param satellite_snr [dB] Signal to noise ratio of satellite
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_gps_status_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t satellites_visible, const uint8_t *satellite_prn, const uint8_t *satellite_used, const uint8_t *satellite_elevation, const uint8_t *satellite_azimuth, const uint8_t *satellite_snr)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_GPS_STATUS_LEN];
-    _mav_put_uint8_t(buf, 0, satellites_visible);
-    _mav_put_uint8_t_array(buf, 1, satellite_prn, 20);
-    _mav_put_uint8_t_array(buf, 21, satellite_used, 20);
-    _mav_put_uint8_t_array(buf, 41, satellite_elevation, 20);
-    _mav_put_uint8_t_array(buf, 61, satellite_azimuth, 20);
-    _mav_put_uint8_t_array(buf, 81, satellite_snr, 20);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_GPS_STATUS_LEN);
-#else
-    mavlink_gps_status_t packet;
-    packet.satellites_visible = satellites_visible;
-    mav_array_memcpy(packet.satellite_prn, satellite_prn, sizeof(uint8_t)*20);
-    mav_array_memcpy(packet.satellite_used, satellite_used, sizeof(uint8_t)*20);
-    mav_array_memcpy(packet.satellite_elevation, satellite_elevation, sizeof(uint8_t)*20);
-    mav_array_memcpy(packet.satellite_azimuth, satellite_azimuth, sizeof(uint8_t)*20);
-    mav_array_memcpy(packet.satellite_snr, satellite_snr, sizeof(uint8_t)*20);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GPS_STATUS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_GPS_STATUS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GPS_STATUS_MIN_LEN, MAVLINK_MSG_ID_GPS_STATUS_LEN, MAVLINK_MSG_ID_GPS_STATUS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GPS_STATUS_MIN_LEN, MAVLINK_MSG_ID_GPS_STATUS_LEN);
-#endif
 }
 
 /**
@@ -159,6 +148,27 @@ static inline uint16_t mavlink_msg_gps_status_pack_chan(uint8_t system_id, uint8
                                mavlink_message_t* msg,
                                    uint8_t satellites_visible,const uint8_t *satellite_prn,const uint8_t *satellite_used,const uint8_t *satellite_elevation,const uint8_t *satellite_azimuth,const uint8_t *satellite_snr)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GPS_STATUS_LEN];
     _mav_put_uint8_t(buf, 0, satellites_visible);
@@ -176,7 +186,16 @@ static inline uint16_t mavlink_msg_gps_status_pack_chan(uint8_t system_id, uint8
     mav_array_memcpy(packet.satellite_elevation, satellite_elevation, sizeof(uint8_t)*20);
     mav_array_memcpy(packet.satellite_azimuth, satellite_azimuth, sizeof(uint8_t)*20);
     mav_array_memcpy(packet.satellite_snr, satellite_snr, sizeof(uint8_t)*20);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GPS_STATUS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GPS_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GPS_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gps_status_t* gps_status_final = (mavlink_gps_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gps_status_final, MAVLINK_MSG_ID_GPS_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GPS_STATUS;
@@ -208,20 +227,6 @@ static inline uint16_t mavlink_msg_gps_status_encode(uint8_t system_id, uint8_t 
 static inline uint16_t mavlink_msg_gps_status_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_gps_status_t* gps_status)
 {
     return mavlink_msg_gps_status_pack_chan(system_id, component_id, chan, msg, gps_status->satellites_visible, gps_status->satellite_prn, gps_status->satellite_used, gps_status->satellite_elevation, gps_status->satellite_azimuth, gps_status->satellite_snr);
-}
-
-/**
- * @brief Encode a gps_status struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param gps_status C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_gps_status_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_gps_status_t* gps_status)
-{
-    return mavlink_msg_gps_status_pack_status(system_id, component_id, _status, msg,  gps_status->satellites_visible, gps_status->satellite_prn, gps_status->satellite_used, gps_status->satellite_elevation, gps_status->satellite_azimuth, gps_status->satellite_snr);
 }
 
 /**
@@ -276,7 +281,7 @@ static inline void mavlink_msg_gps_status_send_struct(mavlink_channel_t chan, co
 
 #if MAVLINK_MSG_ID_GPS_STATUS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -379,6 +384,26 @@ static inline uint16_t mavlink_msg_gps_status_get_satellite_snr(const mavlink_me
  */
 static inline void mavlink_msg_gps_status_decode(const mavlink_message_t* msg, mavlink_gps_status_t* gps_status)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     gps_status->satellites_visible = mavlink_msg_gps_status_get_satellites_visible(msg);
     mavlink_msg_gps_status_get_satellite_prn(msg, gps_status->satellite_prn);
@@ -387,8 +412,22 @@ static inline void mavlink_msg_gps_status_decode(const mavlink_message_t* msg, m
     mavlink_msg_gps_status_get_satellite_azimuth(msg, gps_status->satellite_azimuth);
     mavlink_msg_gps_status_get_satellite_snr(msg, gps_status->satellite_snr);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_GPS_STATUS_LEN? msg->len : MAVLINK_MSG_ID_GPS_STATUS_LEN;
-        memset(gps_status, 0, MAVLINK_MSG_ID_GPS_STATUS_LEN);
-    memcpy(gps_status, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_GPS_STATUS_LEN? msg->len : MAVLINK_MSG_ID_GPS_STATUS_LEN;
+    memset(gps_status, 0, MAVLINK_MSG_ID_GPS_STATUS_LEN);
+    memcpy(gps_status, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(gps_status, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

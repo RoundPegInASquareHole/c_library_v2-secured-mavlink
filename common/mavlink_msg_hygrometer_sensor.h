@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE HYGROMETER_SENSOR PACKING
 
 #define MAVLINK_MSG_ID_HYGROMETER_SENSOR 12920
@@ -55,6 +61,26 @@ typedef struct __mavlink_hygrometer_sensor_t {
 static inline uint16_t mavlink_msg_hygrometer_sensor_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t id, int16_t temperature, uint16_t humidity)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN];
     _mav_put_int16_t(buf, 0, temperature);
@@ -68,50 +94,20 @@ static inline uint16_t mavlink_msg_hygrometer_sensor_pack(uint8_t system_id, uin
     packet.humidity = humidity;
     packet.id = id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_hygrometer_sensor_t* hygrometer_sensor_final = (mavlink_hygrometer_sensor_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), hygrometer_sensor_final, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_HYGROMETER_SENSOR;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_HYGROMETER_SENSOR_MIN_LEN, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN, MAVLINK_MSG_ID_HYGROMETER_SENSOR_CRC);
-}
-
-/**
- * @brief Pack a hygrometer_sensor message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param id  Hygrometer ID
- * @param temperature [cdegC] Temperature
- * @param humidity [c%] Humidity
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_hygrometer_sensor_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t id, int16_t temperature, uint16_t humidity)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN];
-    _mav_put_int16_t(buf, 0, temperature);
-    _mav_put_uint16_t(buf, 2, humidity);
-    _mav_put_uint8_t(buf, 4, id);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
-#else
-    mavlink_hygrometer_sensor_t packet;
-    packet.temperature = temperature;
-    packet.humidity = humidity;
-    packet.id = id;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_HYGROMETER_SENSOR;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_HYGROMETER_SENSOR_MIN_LEN, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN, MAVLINK_MSG_ID_HYGROMETER_SENSOR_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_HYGROMETER_SENSOR_MIN_LEN, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
-#endif
 }
 
 /**
@@ -129,6 +125,27 @@ static inline uint16_t mavlink_msg_hygrometer_sensor_pack_chan(uint8_t system_id
                                mavlink_message_t* msg,
                                    uint8_t id,int16_t temperature,uint16_t humidity)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN];
     _mav_put_int16_t(buf, 0, temperature);
@@ -142,7 +159,16 @@ static inline uint16_t mavlink_msg_hygrometer_sensor_pack_chan(uint8_t system_id
     packet.humidity = humidity;
     packet.id = id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_hygrometer_sensor_t* hygrometer_sensor_final = (mavlink_hygrometer_sensor_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), hygrometer_sensor_final, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_HYGROMETER_SENSOR;
@@ -174,20 +200,6 @@ static inline uint16_t mavlink_msg_hygrometer_sensor_encode(uint8_t system_id, u
 static inline uint16_t mavlink_msg_hygrometer_sensor_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_hygrometer_sensor_t* hygrometer_sensor)
 {
     return mavlink_msg_hygrometer_sensor_pack_chan(system_id, component_id, chan, msg, hygrometer_sensor->id, hygrometer_sensor->temperature, hygrometer_sensor->humidity);
-}
-
-/**
- * @brief Encode a hygrometer_sensor struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param hygrometer_sensor C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_hygrometer_sensor_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_hygrometer_sensor_t* hygrometer_sensor)
-{
-    return mavlink_msg_hygrometer_sensor_pack_status(system_id, component_id, _status, msg,  hygrometer_sensor->id, hygrometer_sensor->temperature, hygrometer_sensor->humidity);
 }
 
 /**
@@ -235,7 +247,7 @@ static inline void mavlink_msg_hygrometer_sensor_send_struct(mavlink_channel_t c
 
 #if MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -304,13 +316,47 @@ static inline uint16_t mavlink_msg_hygrometer_sensor_get_humidity(const mavlink_
  */
 static inline void mavlink_msg_hygrometer_sensor_decode(const mavlink_message_t* msg, mavlink_hygrometer_sensor_t* hygrometer_sensor)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     hygrometer_sensor->temperature = mavlink_msg_hygrometer_sensor_get_temperature(msg);
     hygrometer_sensor->humidity = mavlink_msg_hygrometer_sensor_get_humidity(msg);
     hygrometer_sensor->id = mavlink_msg_hygrometer_sensor_get_id(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN? msg->len : MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN;
-        memset(hygrometer_sensor, 0, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
-    memcpy(hygrometer_sensor, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN? msg->len : MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN;
+    memset(hygrometer_sensor, 0, MAVLINK_MSG_ID_HYGROMETER_SENSOR_LEN);
+    memcpy(hygrometer_sensor, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(hygrometer_sensor, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

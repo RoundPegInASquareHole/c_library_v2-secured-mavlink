@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE WHEEL_DISTANCE PACKING
 
 #define MAVLINK_MSG_ID_WHEEL_DISTANCE 9000
@@ -55,6 +61,26 @@ typedef struct __mavlink_wheel_distance_t {
 static inline uint16_t mavlink_msg_wheel_distance_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint64_t time_usec, uint8_t count, const double *distance)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN];
     _mav_put_uint64_t(buf, 0, time_usec);
@@ -66,48 +92,20 @@ static inline uint16_t mavlink_msg_wheel_distance_pack(uint8_t system_id, uint8_
     packet.time_usec = time_usec;
     packet.count = count;
     mav_array_memcpy(packet.distance, distance, sizeof(double)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_wheel_distance_t* wheel_distance_final = (mavlink_wheel_distance_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), wheel_distance_final, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_WHEEL_DISTANCE;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_WHEEL_DISTANCE_MIN_LEN, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN, MAVLINK_MSG_ID_WHEEL_DISTANCE_CRC);
-}
-
-/**
- * @brief Pack a wheel_distance message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_usec [us] Timestamp (synced to UNIX time or since system boot).
- * @param count  Number of wheels reported.
- * @param distance [m] Distance reported by individual wheel encoders. Forward rotations increase values, reverse rotations decrease them. Not all wheels will necessarily have wheel encoders; the mapping of encoders to wheel positions must be agreed/understood by the endpoints.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_wheel_distance_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint64_t time_usec, uint8_t count, const double *distance)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN];
-    _mav_put_uint64_t(buf, 0, time_usec);
-    _mav_put_uint8_t(buf, 136, count);
-    _mav_put_double_array(buf, 8, distance, 16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
-#else
-    mavlink_wheel_distance_t packet;
-    packet.time_usec = time_usec;
-    packet.count = count;
-    mav_array_memcpy(packet.distance, distance, sizeof(double)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_WHEEL_DISTANCE;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_WHEEL_DISTANCE_MIN_LEN, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN, MAVLINK_MSG_ID_WHEEL_DISTANCE_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_WHEEL_DISTANCE_MIN_LEN, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
-#endif
 }
 
 /**
@@ -125,6 +123,27 @@ static inline uint16_t mavlink_msg_wheel_distance_pack_chan(uint8_t system_id, u
                                mavlink_message_t* msg,
                                    uint64_t time_usec,uint8_t count,const double *distance)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN];
     _mav_put_uint64_t(buf, 0, time_usec);
@@ -136,7 +155,16 @@ static inline uint16_t mavlink_msg_wheel_distance_pack_chan(uint8_t system_id, u
     packet.time_usec = time_usec;
     packet.count = count;
     mav_array_memcpy(packet.distance, distance, sizeof(double)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_wheel_distance_t* wheel_distance_final = (mavlink_wheel_distance_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), wheel_distance_final, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_WHEEL_DISTANCE;
@@ -168,20 +196,6 @@ static inline uint16_t mavlink_msg_wheel_distance_encode(uint8_t system_id, uint
 static inline uint16_t mavlink_msg_wheel_distance_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_wheel_distance_t* wheel_distance)
 {
     return mavlink_msg_wheel_distance_pack_chan(system_id, component_id, chan, msg, wheel_distance->time_usec, wheel_distance->count, wheel_distance->distance);
-}
-
-/**
- * @brief Encode a wheel_distance struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param wheel_distance C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_wheel_distance_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_wheel_distance_t* wheel_distance)
-{
-    return mavlink_msg_wheel_distance_pack_status(system_id, component_id, _status, msg,  wheel_distance->time_usec, wheel_distance->count, wheel_distance->distance);
 }
 
 /**
@@ -227,7 +241,7 @@ static inline void mavlink_msg_wheel_distance_send_struct(mavlink_channel_t chan
 
 #if MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -294,13 +308,47 @@ static inline uint16_t mavlink_msg_wheel_distance_get_distance(const mavlink_mes
  */
 static inline void mavlink_msg_wheel_distance_decode(const mavlink_message_t* msg, mavlink_wheel_distance_t* wheel_distance)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     wheel_distance->time_usec = mavlink_msg_wheel_distance_get_time_usec(msg);
     mavlink_msg_wheel_distance_get_distance(msg, wheel_distance->distance);
     wheel_distance->count = mavlink_msg_wheel_distance_get_count(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN? msg->len : MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN;
-        memset(wheel_distance, 0, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
-    memcpy(wheel_distance, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN? msg->len : MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN;
+    memset(wheel_distance, 0, MAVLINK_MSG_ID_WHEEL_DISTANCE_LEN);
+    memcpy(wheel_distance, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(wheel_distance, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

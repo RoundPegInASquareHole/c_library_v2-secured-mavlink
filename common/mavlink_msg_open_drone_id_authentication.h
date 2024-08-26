@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE OPEN_DRONE_ID_AUTHENTICATION PACKING
 
 #define MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION 12902
@@ -80,6 +86,26 @@ typedef struct __mavlink_open_drone_id_authentication_t {
 static inline uint16_t mavlink_msg_open_drone_id_authentication_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t target_system, uint8_t target_component, const uint8_t *id_or_mac, uint8_t authentication_type, uint8_t data_page, uint8_t last_page_index, uint8_t length, uint32_t timestamp, const uint8_t *authentication_data)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN];
     _mav_put_uint32_t(buf, 0, timestamp);
@@ -103,66 +129,20 @@ static inline uint16_t mavlink_msg_open_drone_id_authentication_pack(uint8_t sys
     packet.length = length;
     mav_array_memcpy(packet.id_or_mac, id_or_mac, sizeof(uint8_t)*20);
     mav_array_memcpy(packet.authentication_data, authentication_data, sizeof(uint8_t)*23);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_open_drone_id_authentication_t* open_drone_id_authentication_final = (mavlink_open_drone_id_authentication_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), open_drone_id_authentication_final, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_MIN_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_CRC);
-}
-
-/**
- * @brief Pack a open_drone_id_authentication message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param target_system  System ID (0 for broadcast).
- * @param target_component  Component ID (0 for broadcast).
- * @param id_or_mac  Only used for drone ID data received from other UAs. See detailed description at https://mavlink.io/en/services/opendroneid.html. 
- * @param authentication_type  Indicates the type of authentication.
- * @param data_page  Allowed range is 0 - 15.
- * @param last_page_index  This field is only present for page 0. Allowed range is 0 - 15. See the description of struct ODID_Auth_data at https://github.com/opendroneid/opendroneid-core-c/blob/master/libopendroneid/opendroneid.h.
- * @param length [bytes] This field is only present for page 0. Total bytes of authentication_data from all data pages. See the description of struct ODID_Auth_data at https://github.com/opendroneid/opendroneid-core-c/blob/master/libopendroneid/opendroneid.h.
- * @param timestamp [s] This field is only present for page 0. 32 bit Unix Timestamp in seconds since 00:00:00 01/01/2019.
- * @param authentication_data  Opaque authentication data. For page 0, the size is only 17 bytes. For other pages, the size is 23 bytes. Shall be filled with nulls in the unused portion of the field.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_open_drone_id_authentication_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t target_system, uint8_t target_component, const uint8_t *id_or_mac, uint8_t authentication_type, uint8_t data_page, uint8_t last_page_index, uint8_t length, uint32_t timestamp, const uint8_t *authentication_data)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN];
-    _mav_put_uint32_t(buf, 0, timestamp);
-    _mav_put_uint8_t(buf, 4, target_system);
-    _mav_put_uint8_t(buf, 5, target_component);
-    _mav_put_uint8_t(buf, 26, authentication_type);
-    _mav_put_uint8_t(buf, 27, data_page);
-    _mav_put_uint8_t(buf, 28, last_page_index);
-    _mav_put_uint8_t(buf, 29, length);
-    _mav_put_uint8_t_array(buf, 6, id_or_mac, 20);
-    _mav_put_uint8_t_array(buf, 30, authentication_data, 23);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
-#else
-    mavlink_open_drone_id_authentication_t packet;
-    packet.timestamp = timestamp;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-    packet.authentication_type = authentication_type;
-    packet.data_page = data_page;
-    packet.last_page_index = last_page_index;
-    packet.length = length;
-    mav_array_memcpy(packet.id_or_mac, id_or_mac, sizeof(uint8_t)*20);
-    mav_array_memcpy(packet.authentication_data, authentication_data, sizeof(uint8_t)*23);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_MIN_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_MIN_LEN, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
-#endif
 }
 
 /**
@@ -186,6 +166,27 @@ static inline uint16_t mavlink_msg_open_drone_id_authentication_pack_chan(uint8_
                                mavlink_message_t* msg,
                                    uint8_t target_system,uint8_t target_component,const uint8_t *id_or_mac,uint8_t authentication_type,uint8_t data_page,uint8_t last_page_index,uint8_t length,uint32_t timestamp,const uint8_t *authentication_data)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN];
     _mav_put_uint32_t(buf, 0, timestamp);
@@ -209,7 +210,16 @@ static inline uint16_t mavlink_msg_open_drone_id_authentication_pack_chan(uint8_
     packet.length = length;
     mav_array_memcpy(packet.id_or_mac, id_or_mac, sizeof(uint8_t)*20);
     mav_array_memcpy(packet.authentication_data, authentication_data, sizeof(uint8_t)*23);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_open_drone_id_authentication_t* open_drone_id_authentication_final = (mavlink_open_drone_id_authentication_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), open_drone_id_authentication_final, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION;
@@ -241,20 +251,6 @@ static inline uint16_t mavlink_msg_open_drone_id_authentication_encode(uint8_t s
 static inline uint16_t mavlink_msg_open_drone_id_authentication_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_open_drone_id_authentication_t* open_drone_id_authentication)
 {
     return mavlink_msg_open_drone_id_authentication_pack_chan(system_id, component_id, chan, msg, open_drone_id_authentication->target_system, open_drone_id_authentication->target_component, open_drone_id_authentication->id_or_mac, open_drone_id_authentication->authentication_type, open_drone_id_authentication->data_page, open_drone_id_authentication->last_page_index, open_drone_id_authentication->length, open_drone_id_authentication->timestamp, open_drone_id_authentication->authentication_data);
-}
-
-/**
- * @brief Encode a open_drone_id_authentication struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param open_drone_id_authentication C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_open_drone_id_authentication_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_open_drone_id_authentication_t* open_drone_id_authentication)
-{
-    return mavlink_msg_open_drone_id_authentication_pack_status(system_id, component_id, _status, msg,  open_drone_id_authentication->target_system, open_drone_id_authentication->target_component, open_drone_id_authentication->id_or_mac, open_drone_id_authentication->authentication_type, open_drone_id_authentication->data_page, open_drone_id_authentication->last_page_index, open_drone_id_authentication->length, open_drone_id_authentication->timestamp, open_drone_id_authentication->authentication_data);
 }
 
 /**
@@ -318,7 +314,7 @@ static inline void mavlink_msg_open_drone_id_authentication_send_struct(mavlink_
 
 #if MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -457,6 +453,26 @@ static inline uint16_t mavlink_msg_open_drone_id_authentication_get_authenticati
  */
 static inline void mavlink_msg_open_drone_id_authentication_decode(const mavlink_message_t* msg, mavlink_open_drone_id_authentication_t* open_drone_id_authentication)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     open_drone_id_authentication->timestamp = mavlink_msg_open_drone_id_authentication_get_timestamp(msg);
     open_drone_id_authentication->target_system = mavlink_msg_open_drone_id_authentication_get_target_system(msg);
@@ -468,8 +484,22 @@ static inline void mavlink_msg_open_drone_id_authentication_decode(const mavlink
     open_drone_id_authentication->length = mavlink_msg_open_drone_id_authentication_get_length(msg);
     mavlink_msg_open_drone_id_authentication_get_authentication_data(msg, open_drone_id_authentication->authentication_data);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN? msg->len : MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN;
-        memset(open_drone_id_authentication, 0, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
-    memcpy(open_drone_id_authentication, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN? msg->len : MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN;
+    memset(open_drone_id_authentication, 0, MAVLINK_MSG_ID_OPEN_DRONE_ID_AUTHENTICATION_LEN);
+    memcpy(open_drone_id_authentication, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(open_drone_id_authentication, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

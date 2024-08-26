@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE HIGH_LATENCY PACKING
 
 #define MAVLINK_MSG_ID_HIGH_LATENCY 234
@@ -139,6 +145,26 @@ typedef struct __mavlink_high_latency_t {
 static inline uint16_t mavlink_msg_high_latency_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t base_mode, uint32_t custom_mode, uint8_t landed_state, int16_t roll, int16_t pitch, uint16_t heading, int8_t throttle, int16_t heading_sp, int32_t latitude, int32_t longitude, int16_t altitude_amsl, int16_t altitude_sp, uint8_t airspeed, uint8_t airspeed_sp, uint8_t groundspeed, int8_t climb_rate, uint8_t gps_nsat, uint8_t gps_fix_type, uint8_t battery_remaining, int8_t temperature, int8_t temperature_air, uint8_t failsafe, uint8_t wp_num, uint16_t wp_distance)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_HIGH_LATENCY_LEN];
     _mav_put_uint32_t(buf, 0, custom_mode);
@@ -194,113 +220,20 @@ static inline uint16_t mavlink_msg_high_latency_pack(uint8_t system_id, uint8_t 
     packet.failsafe = failsafe;
     packet.wp_num = wp_num;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_HIGH_LATENCY_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_high_latency_t* high_latency_final = (mavlink_high_latency_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), high_latency_final, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_HIGH_LATENCY;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_HIGH_LATENCY_MIN_LEN, MAVLINK_MSG_ID_HIGH_LATENCY_LEN, MAVLINK_MSG_ID_HIGH_LATENCY_CRC);
-}
-
-/**
- * @brief Pack a high_latency message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param base_mode  Bitmap of enabled system modes.
- * @param custom_mode  A bitfield for use for autopilot-specific flags.
- * @param landed_state  The landed state. Is set to MAV_LANDED_STATE_UNDEFINED if landed state is unknown.
- * @param roll [cdeg] roll
- * @param pitch [cdeg] pitch
- * @param heading [cdeg] heading
- * @param throttle [%] throttle (percentage)
- * @param heading_sp [cdeg] heading setpoint
- * @param latitude [degE7] Latitude
- * @param longitude [degE7] Longitude
- * @param altitude_amsl [m] Altitude above mean sea level
- * @param altitude_sp [m] Altitude setpoint relative to the home position
- * @param airspeed [m/s] airspeed
- * @param airspeed_sp [m/s] airspeed setpoint
- * @param groundspeed [m/s] groundspeed
- * @param climb_rate [m/s] climb rate
- * @param gps_nsat  Number of satellites visible. If unknown, set to UINT8_MAX
- * @param gps_fix_type  GPS Fix type.
- * @param battery_remaining [%] Remaining battery (percentage)
- * @param temperature [degC] Autopilot temperature (degrees C)
- * @param temperature_air [degC] Air temperature (degrees C) from airspeed sensor
- * @param failsafe  failsafe (each bit represents a failsafe where 0=ok, 1=failsafe active (bit0:RC, bit1:batt, bit2:GPS, bit3:GCS, bit4:fence)
- * @param wp_num  current waypoint number
- * @param wp_distance [m] distance to target
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_high_latency_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t base_mode, uint32_t custom_mode, uint8_t landed_state, int16_t roll, int16_t pitch, uint16_t heading, int8_t throttle, int16_t heading_sp, int32_t latitude, int32_t longitude, int16_t altitude_amsl, int16_t altitude_sp, uint8_t airspeed, uint8_t airspeed_sp, uint8_t groundspeed, int8_t climb_rate, uint8_t gps_nsat, uint8_t gps_fix_type, uint8_t battery_remaining, int8_t temperature, int8_t temperature_air, uint8_t failsafe, uint8_t wp_num, uint16_t wp_distance)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_HIGH_LATENCY_LEN];
-    _mav_put_uint32_t(buf, 0, custom_mode);
-    _mav_put_int32_t(buf, 4, latitude);
-    _mav_put_int32_t(buf, 8, longitude);
-    _mav_put_int16_t(buf, 12, roll);
-    _mav_put_int16_t(buf, 14, pitch);
-    _mav_put_uint16_t(buf, 16, heading);
-    _mav_put_int16_t(buf, 18, heading_sp);
-    _mav_put_int16_t(buf, 20, altitude_amsl);
-    _mav_put_int16_t(buf, 22, altitude_sp);
-    _mav_put_uint16_t(buf, 24, wp_distance);
-    _mav_put_uint8_t(buf, 26, base_mode);
-    _mav_put_uint8_t(buf, 27, landed_state);
-    _mav_put_int8_t(buf, 28, throttle);
-    _mav_put_uint8_t(buf, 29, airspeed);
-    _mav_put_uint8_t(buf, 30, airspeed_sp);
-    _mav_put_uint8_t(buf, 31, groundspeed);
-    _mav_put_int8_t(buf, 32, climb_rate);
-    _mav_put_uint8_t(buf, 33, gps_nsat);
-    _mav_put_uint8_t(buf, 34, gps_fix_type);
-    _mav_put_uint8_t(buf, 35, battery_remaining);
-    _mav_put_int8_t(buf, 36, temperature);
-    _mav_put_int8_t(buf, 37, temperature_air);
-    _mav_put_uint8_t(buf, 38, failsafe);
-    _mav_put_uint8_t(buf, 39, wp_num);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
-#else
-    mavlink_high_latency_t packet;
-    packet.custom_mode = custom_mode;
-    packet.latitude = latitude;
-    packet.longitude = longitude;
-    packet.roll = roll;
-    packet.pitch = pitch;
-    packet.heading = heading;
-    packet.heading_sp = heading_sp;
-    packet.altitude_amsl = altitude_amsl;
-    packet.altitude_sp = altitude_sp;
-    packet.wp_distance = wp_distance;
-    packet.base_mode = base_mode;
-    packet.landed_state = landed_state;
-    packet.throttle = throttle;
-    packet.airspeed = airspeed;
-    packet.airspeed_sp = airspeed_sp;
-    packet.groundspeed = groundspeed;
-    packet.climb_rate = climb_rate;
-    packet.gps_nsat = gps_nsat;
-    packet.gps_fix_type = gps_fix_type;
-    packet.battery_remaining = battery_remaining;
-    packet.temperature = temperature;
-    packet.temperature_air = temperature_air;
-    packet.failsafe = failsafe;
-    packet.wp_num = wp_num;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_HIGH_LATENCY;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_HIGH_LATENCY_MIN_LEN, MAVLINK_MSG_ID_HIGH_LATENCY_LEN, MAVLINK_MSG_ID_HIGH_LATENCY_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_HIGH_LATENCY_MIN_LEN, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
-#endif
 }
 
 /**
@@ -339,6 +272,27 @@ static inline uint16_t mavlink_msg_high_latency_pack_chan(uint8_t system_id, uin
                                mavlink_message_t* msg,
                                    uint8_t base_mode,uint32_t custom_mode,uint8_t landed_state,int16_t roll,int16_t pitch,uint16_t heading,int8_t throttle,int16_t heading_sp,int32_t latitude,int32_t longitude,int16_t altitude_amsl,int16_t altitude_sp,uint8_t airspeed,uint8_t airspeed_sp,uint8_t groundspeed,int8_t climb_rate,uint8_t gps_nsat,uint8_t gps_fix_type,uint8_t battery_remaining,int8_t temperature,int8_t temperature_air,uint8_t failsafe,uint8_t wp_num,uint16_t wp_distance)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_HIGH_LATENCY_LEN];
     _mav_put_uint32_t(buf, 0, custom_mode);
@@ -394,7 +348,16 @@ static inline uint16_t mavlink_msg_high_latency_pack_chan(uint8_t system_id, uin
     packet.failsafe = failsafe;
     packet.wp_num = wp_num;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_HIGH_LATENCY_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_high_latency_t* high_latency_final = (mavlink_high_latency_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), high_latency_final, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_HIGH_LATENCY;
@@ -426,20 +389,6 @@ static inline uint16_t mavlink_msg_high_latency_encode(uint8_t system_id, uint8_
 static inline uint16_t mavlink_msg_high_latency_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_high_latency_t* high_latency)
 {
     return mavlink_msg_high_latency_pack_chan(system_id, component_id, chan, msg, high_latency->base_mode, high_latency->custom_mode, high_latency->landed_state, high_latency->roll, high_latency->pitch, high_latency->heading, high_latency->throttle, high_latency->heading_sp, high_latency->latitude, high_latency->longitude, high_latency->altitude_amsl, high_latency->altitude_sp, high_latency->airspeed, high_latency->airspeed_sp, high_latency->groundspeed, high_latency->climb_rate, high_latency->gps_nsat, high_latency->gps_fix_type, high_latency->battery_remaining, high_latency->temperature, high_latency->temperature_air, high_latency->failsafe, high_latency->wp_num, high_latency->wp_distance);
-}
-
-/**
- * @brief Encode a high_latency struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param high_latency C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_high_latency_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_high_latency_t* high_latency)
-{
-    return mavlink_msg_high_latency_pack_status(system_id, component_id, _status, msg,  high_latency->base_mode, high_latency->custom_mode, high_latency->landed_state, high_latency->roll, high_latency->pitch, high_latency->heading, high_latency->throttle, high_latency->heading_sp, high_latency->latitude, high_latency->longitude, high_latency->altitude_amsl, high_latency->altitude_sp, high_latency->airspeed, high_latency->airspeed_sp, high_latency->groundspeed, high_latency->climb_rate, high_latency->gps_nsat, high_latency->gps_fix_type, high_latency->battery_remaining, high_latency->temperature, high_latency->temperature_air, high_latency->failsafe, high_latency->wp_num, high_latency->wp_distance);
 }
 
 /**
@@ -550,7 +499,7 @@ static inline void mavlink_msg_high_latency_send_struct(mavlink_channel_t chan, 
 
 #if MAVLINK_MSG_ID_HIGH_LATENCY_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -871,6 +820,26 @@ static inline uint16_t mavlink_msg_high_latency_get_wp_distance(const mavlink_me
  */
 static inline void mavlink_msg_high_latency_decode(const mavlink_message_t* msg, mavlink_high_latency_t* high_latency)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     high_latency->custom_mode = mavlink_msg_high_latency_get_custom_mode(msg);
     high_latency->latitude = mavlink_msg_high_latency_get_latitude(msg);
@@ -897,8 +866,22 @@ static inline void mavlink_msg_high_latency_decode(const mavlink_message_t* msg,
     high_latency->failsafe = mavlink_msg_high_latency_get_failsafe(msg);
     high_latency->wp_num = mavlink_msg_high_latency_get_wp_num(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_HIGH_LATENCY_LEN? msg->len : MAVLINK_MSG_ID_HIGH_LATENCY_LEN;
-        memset(high_latency, 0, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
-    memcpy(high_latency, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_HIGH_LATENCY_LEN? msg->len : MAVLINK_MSG_ID_HIGH_LATENCY_LEN;
+    memset(high_latency, 0, MAVLINK_MSG_ID_HIGH_LATENCY_LEN);
+    memcpy(high_latency, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(high_latency, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

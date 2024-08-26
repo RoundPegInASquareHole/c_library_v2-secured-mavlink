@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE SET_POSITION_TARGET_LOCAL_NED PACKING
 
 #define MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED 84
@@ -107,6 +113,26 @@ typedef struct __mavlink_set_position_target_local_ned_t {
 static inline uint16_t mavlink_msg_set_position_target_local_ned_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, uint8_t target_system, uint8_t target_component, uint8_t coordinate_frame, uint16_t type_mask, float x, float y, float z, float vx, float vy, float vz, float afx, float afy, float afz, float yaw, float yaw_rate)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -146,89 +172,20 @@ static inline uint16_t mavlink_msg_set_position_target_local_ned_pack(uint8_t sy
     packet.target_component = target_component;
     packet.coordinate_frame = coordinate_frame;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_set_position_target_local_ned_t* set_position_target_local_ned_final = (mavlink_set_position_target_local_ned_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), set_position_target_local_ned_final, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_MIN_LEN, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_CRC);
-}
-
-/**
- * @brief Pack a set_position_target_local_ned message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param target_system  System ID
- * @param target_component  Component ID
- * @param coordinate_frame  Valid options are: MAV_FRAME_LOCAL_NED = 1, MAV_FRAME_LOCAL_OFFSET_NED = 7, MAV_FRAME_BODY_NED = 8, MAV_FRAME_BODY_OFFSET_NED = 9
- * @param type_mask  Bitmap to indicate which dimensions should be ignored by the vehicle.
- * @param x [m] X Position in NED frame
- * @param y [m] Y Position in NED frame
- * @param z [m] Z Position in NED frame (note, altitude is negative in NED)
- * @param vx [m/s] X velocity in NED frame
- * @param vy [m/s] Y velocity in NED frame
- * @param vz [m/s] Z velocity in NED frame
- * @param afx [m/s/s] X acceleration or force (if bit 10 of type_mask is set) in NED frame in meter / s^2 or N
- * @param afy [m/s/s] Y acceleration or force (if bit 10 of type_mask is set) in NED frame in meter / s^2 or N
- * @param afz [m/s/s] Z acceleration or force (if bit 10 of type_mask is set) in NED frame in meter / s^2 or N
- * @param yaw [rad] yaw setpoint
- * @param yaw_rate [rad/s] yaw rate setpoint
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_set_position_target_local_ned_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, uint8_t target_system, uint8_t target_component, uint8_t coordinate_frame, uint16_t type_mask, float x, float y, float z, float vx, float vy, float vz, float afx, float afy, float afz, float yaw, float yaw_rate)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_float(buf, 4, x);
-    _mav_put_float(buf, 8, y);
-    _mav_put_float(buf, 12, z);
-    _mav_put_float(buf, 16, vx);
-    _mav_put_float(buf, 20, vy);
-    _mav_put_float(buf, 24, vz);
-    _mav_put_float(buf, 28, afx);
-    _mav_put_float(buf, 32, afy);
-    _mav_put_float(buf, 36, afz);
-    _mav_put_float(buf, 40, yaw);
-    _mav_put_float(buf, 44, yaw_rate);
-    _mav_put_uint16_t(buf, 48, type_mask);
-    _mav_put_uint8_t(buf, 50, target_system);
-    _mav_put_uint8_t(buf, 51, target_component);
-    _mav_put_uint8_t(buf, 52, coordinate_frame);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
-#else
-    mavlink_set_position_target_local_ned_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.x = x;
-    packet.y = y;
-    packet.z = z;
-    packet.vx = vx;
-    packet.vy = vy;
-    packet.vz = vz;
-    packet.afx = afx;
-    packet.afy = afy;
-    packet.afz = afz;
-    packet.yaw = yaw;
-    packet.yaw_rate = yaw_rate;
-    packet.type_mask = type_mask;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-    packet.coordinate_frame = coordinate_frame;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_MIN_LEN, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_MIN_LEN, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
-#endif
 }
 
 /**
@@ -259,6 +216,27 @@ static inline uint16_t mavlink_msg_set_position_target_local_ned_pack_chan(uint8
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,uint8_t target_system,uint8_t target_component,uint8_t coordinate_frame,uint16_t type_mask,float x,float y,float z,float vx,float vy,float vz,float afx,float afy,float afz,float yaw,float yaw_rate)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -298,7 +276,16 @@ static inline uint16_t mavlink_msg_set_position_target_local_ned_pack_chan(uint8
     packet.target_component = target_component;
     packet.coordinate_frame = coordinate_frame;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_set_position_target_local_ned_t* set_position_target_local_ned_final = (mavlink_set_position_target_local_ned_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), set_position_target_local_ned_final, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED;
@@ -330,20 +317,6 @@ static inline uint16_t mavlink_msg_set_position_target_local_ned_encode(uint8_t 
 static inline uint16_t mavlink_msg_set_position_target_local_ned_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_set_position_target_local_ned_t* set_position_target_local_ned)
 {
     return mavlink_msg_set_position_target_local_ned_pack_chan(system_id, component_id, chan, msg, set_position_target_local_ned->time_boot_ms, set_position_target_local_ned->target_system, set_position_target_local_ned->target_component, set_position_target_local_ned->coordinate_frame, set_position_target_local_ned->type_mask, set_position_target_local_ned->x, set_position_target_local_ned->y, set_position_target_local_ned->z, set_position_target_local_ned->vx, set_position_target_local_ned->vy, set_position_target_local_ned->vz, set_position_target_local_ned->afx, set_position_target_local_ned->afy, set_position_target_local_ned->afz, set_position_target_local_ned->yaw, set_position_target_local_ned->yaw_rate);
-}
-
-/**
- * @brief Encode a set_position_target_local_ned struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param set_position_target_local_ned C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_set_position_target_local_ned_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_set_position_target_local_ned_t* set_position_target_local_ned)
-{
-    return mavlink_msg_set_position_target_local_ned_pack_status(system_id, component_id, _status, msg,  set_position_target_local_ned->time_boot_ms, set_position_target_local_ned->target_system, set_position_target_local_ned->target_component, set_position_target_local_ned->coordinate_frame, set_position_target_local_ned->type_mask, set_position_target_local_ned->x, set_position_target_local_ned->y, set_position_target_local_ned->z, set_position_target_local_ned->vx, set_position_target_local_ned->vy, set_position_target_local_ned->vz, set_position_target_local_ned->afx, set_position_target_local_ned->afy, set_position_target_local_ned->afz, set_position_target_local_ned->yaw, set_position_target_local_ned->yaw_rate);
 }
 
 /**
@@ -430,7 +403,7 @@ static inline void mavlink_msg_set_position_target_local_ned_send_struct(mavlink
 
 #if MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -655,6 +628,26 @@ static inline float mavlink_msg_set_position_target_local_ned_get_yaw_rate(const
  */
 static inline void mavlink_msg_set_position_target_local_ned_decode(const mavlink_message_t* msg, mavlink_set_position_target_local_ned_t* set_position_target_local_ned)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     set_position_target_local_ned->time_boot_ms = mavlink_msg_set_position_target_local_ned_get_time_boot_ms(msg);
     set_position_target_local_ned->x = mavlink_msg_set_position_target_local_ned_get_x(msg);
@@ -673,8 +666,22 @@ static inline void mavlink_msg_set_position_target_local_ned_decode(const mavlin
     set_position_target_local_ned->target_component = mavlink_msg_set_position_target_local_ned_get_target_component(msg);
     set_position_target_local_ned->coordinate_frame = mavlink_msg_set_position_target_local_ned_get_coordinate_frame(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN? msg->len : MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN;
-        memset(set_position_target_local_ned, 0, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
-    memcpy(set_position_target_local_ned, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN? msg->len : MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN;
+    memset(set_position_target_local_ned, 0, MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED_LEN);
+    memcpy(set_position_target_local_ned, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(set_position_target_local_ned, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

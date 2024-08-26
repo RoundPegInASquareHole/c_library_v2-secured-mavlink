@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE OBSTACLE_DISTANCE_3D PACKING
 
 #define MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D 11037
@@ -79,6 +85,26 @@ typedef struct __mavlink_obstacle_distance_3d_t {
 static inline uint16_t mavlink_msg_obstacle_distance_3d_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, uint8_t sensor_type, uint8_t frame, uint16_t obstacle_id, float x, float y, float z, float min_distance, float max_distance)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -104,68 +130,20 @@ static inline uint16_t mavlink_msg_obstacle_distance_3d_pack(uint8_t system_id, 
     packet.sensor_type = sensor_type;
     packet.frame = frame;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_obstacle_distance_3d_t* obstacle_distance_3d_final = (mavlink_obstacle_distance_3d_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), obstacle_distance_3d_final, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_MIN_LEN, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_CRC);
-}
-
-/**
- * @brief Pack a obstacle_distance_3d message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param sensor_type  Class id of the distance sensor type.
- * @param frame  Coordinate frame of reference.
- * @param obstacle_id   Unique ID given to each obstacle so that its movement can be tracked. Use UINT16_MAX if object ID is unknown or cannot be determined.
- * @param x [m]  X position of the obstacle.
- * @param y [m]  Y position of the obstacle.
- * @param z [m]  Z position of the obstacle.
- * @param min_distance [m] Minimum distance the sensor can measure.
- * @param max_distance [m] Maximum distance the sensor can measure.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_obstacle_distance_3d_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, uint8_t sensor_type, uint8_t frame, uint16_t obstacle_id, float x, float y, float z, float min_distance, float max_distance)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_float(buf, 4, x);
-    _mav_put_float(buf, 8, y);
-    _mav_put_float(buf, 12, z);
-    _mav_put_float(buf, 16, min_distance);
-    _mav_put_float(buf, 20, max_distance);
-    _mav_put_uint16_t(buf, 24, obstacle_id);
-    _mav_put_uint8_t(buf, 26, sensor_type);
-    _mav_put_uint8_t(buf, 27, frame);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
-#else
-    mavlink_obstacle_distance_3d_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.x = x;
-    packet.y = y;
-    packet.z = z;
-    packet.min_distance = min_distance;
-    packet.max_distance = max_distance;
-    packet.obstacle_id = obstacle_id;
-    packet.sensor_type = sensor_type;
-    packet.frame = frame;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_MIN_LEN, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_MIN_LEN, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
-#endif
 }
 
 /**
@@ -189,6 +167,27 @@ static inline uint16_t mavlink_msg_obstacle_distance_3d_pack_chan(uint8_t system
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,uint8_t sensor_type,uint8_t frame,uint16_t obstacle_id,float x,float y,float z,float min_distance,float max_distance)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -214,7 +213,16 @@ static inline uint16_t mavlink_msg_obstacle_distance_3d_pack_chan(uint8_t system
     packet.sensor_type = sensor_type;
     packet.frame = frame;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_obstacle_distance_3d_t* obstacle_distance_3d_final = (mavlink_obstacle_distance_3d_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), obstacle_distance_3d_final, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D;
@@ -246,20 +254,6 @@ static inline uint16_t mavlink_msg_obstacle_distance_3d_encode(uint8_t system_id
 static inline uint16_t mavlink_msg_obstacle_distance_3d_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_obstacle_distance_3d_t* obstacle_distance_3d)
 {
     return mavlink_msg_obstacle_distance_3d_pack_chan(system_id, component_id, chan, msg, obstacle_distance_3d->time_boot_ms, obstacle_distance_3d->sensor_type, obstacle_distance_3d->frame, obstacle_distance_3d->obstacle_id, obstacle_distance_3d->x, obstacle_distance_3d->y, obstacle_distance_3d->z, obstacle_distance_3d->min_distance, obstacle_distance_3d->max_distance);
-}
-
-/**
- * @brief Encode a obstacle_distance_3d struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param obstacle_distance_3d C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_obstacle_distance_3d_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_obstacle_distance_3d_t* obstacle_distance_3d)
-{
-    return mavlink_msg_obstacle_distance_3d_pack_status(system_id, component_id, _status, msg,  obstacle_distance_3d->time_boot_ms, obstacle_distance_3d->sensor_type, obstacle_distance_3d->frame, obstacle_distance_3d->obstacle_id, obstacle_distance_3d->x, obstacle_distance_3d->y, obstacle_distance_3d->z, obstacle_distance_3d->min_distance, obstacle_distance_3d->max_distance);
 }
 
 /**
@@ -325,7 +319,7 @@ static inline void mavlink_msg_obstacle_distance_3d_send_struct(mavlink_channel_
 
 #if MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -466,6 +460,26 @@ static inline float mavlink_msg_obstacle_distance_3d_get_max_distance(const mavl
  */
 static inline void mavlink_msg_obstacle_distance_3d_decode(const mavlink_message_t* msg, mavlink_obstacle_distance_3d_t* obstacle_distance_3d)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     obstacle_distance_3d->time_boot_ms = mavlink_msg_obstacle_distance_3d_get_time_boot_ms(msg);
     obstacle_distance_3d->x = mavlink_msg_obstacle_distance_3d_get_x(msg);
@@ -477,8 +491,22 @@ static inline void mavlink_msg_obstacle_distance_3d_decode(const mavlink_message
     obstacle_distance_3d->sensor_type = mavlink_msg_obstacle_distance_3d_get_sensor_type(msg);
     obstacle_distance_3d->frame = mavlink_msg_obstacle_distance_3d_get_frame(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN? msg->len : MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN;
-        memset(obstacle_distance_3d, 0, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
-    memcpy(obstacle_distance_3d, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN? msg->len : MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN;
+    memset(obstacle_distance_3d, 0, MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D_LEN);
+    memcpy(obstacle_distance_3d, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(obstacle_distance_3d, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

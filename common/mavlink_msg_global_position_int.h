@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE GLOBAL_POSITION_INT PACKING
 
 #define MAVLINK_MSG_ID_GLOBAL_POSITION_INT 33
@@ -9,7 +15,7 @@ typedef struct __mavlink_global_position_int_t {
  int32_t lat; /*< [degE7] Latitude, expressed*/
  int32_t lon; /*< [degE7] Longitude, expressed*/
  int32_t alt; /*< [mm] Altitude (MSL). Note that virtually all GPS modules provide both WGS84 and MSL.*/
- int32_t relative_alt; /*< [mm] Altitude above home*/
+ int32_t relative_alt; /*< [mm] Altitude above ground*/
  int16_t vx; /*< [cm/s] Ground X Speed (Latitude, positive north)*/
  int16_t vy; /*< [cm/s] Ground Y Speed (Longitude, positive east)*/
  int16_t vz; /*< [cm/s] Ground Z Speed (Altitude, positive down)*/
@@ -69,7 +75,7 @@ typedef struct __mavlink_global_position_int_t {
  * @param lat [degE7] Latitude, expressed
  * @param lon [degE7] Longitude, expressed
  * @param alt [mm] Altitude (MSL). Note that virtually all GPS modules provide both WGS84 and MSL.
- * @param relative_alt [mm] Altitude above home
+ * @param relative_alt [mm] Altitude above ground
  * @param vx [cm/s] Ground X Speed (Latitude, positive north)
  * @param vy [cm/s] Ground Y Speed (Longitude, positive east)
  * @param vz [cm/s] Ground Z Speed (Altitude, positive down)
@@ -79,6 +85,26 @@ typedef struct __mavlink_global_position_int_t {
 static inline uint16_t mavlink_msg_global_position_int_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, int32_t lat, int32_t lon, int32_t alt, int32_t relative_alt, int16_t vx, int16_t vy, int16_t vz, uint16_t hdg)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -104,68 +130,20 @@ static inline uint16_t mavlink_msg_global_position_int_pack(uint8_t system_id, u
     packet.vz = vz;
     packet.hdg = hdg;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_global_position_int_t* global_position_int_final = (mavlink_global_position_int_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), global_position_int_final, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GLOBAL_POSITION_INT;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_MIN_LEN, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_CRC);
-}
-
-/**
- * @brief Pack a global_position_int message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param lat [degE7] Latitude, expressed
- * @param lon [degE7] Longitude, expressed
- * @param alt [mm] Altitude (MSL). Note that virtually all GPS modules provide both WGS84 and MSL.
- * @param relative_alt [mm] Altitude above home
- * @param vx [cm/s] Ground X Speed (Latitude, positive north)
- * @param vy [cm/s] Ground Y Speed (Longitude, positive east)
- * @param vz [cm/s] Ground Z Speed (Altitude, positive down)
- * @param hdg [cdeg] Vehicle heading (yaw angle), 0.0..359.99 degrees. If unknown, set to: UINT16_MAX
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_global_position_int_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, int32_t lat, int32_t lon, int32_t alt, int32_t relative_alt, int16_t vx, int16_t vy, int16_t vz, uint16_t hdg)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_int32_t(buf, 4, lat);
-    _mav_put_int32_t(buf, 8, lon);
-    _mav_put_int32_t(buf, 12, alt);
-    _mav_put_int32_t(buf, 16, relative_alt);
-    _mav_put_int16_t(buf, 20, vx);
-    _mav_put_int16_t(buf, 22, vy);
-    _mav_put_int16_t(buf, 24, vz);
-    _mav_put_uint16_t(buf, 26, hdg);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
-#else
-    mavlink_global_position_int_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.lat = lat;
-    packet.lon = lon;
-    packet.alt = alt;
-    packet.relative_alt = relative_alt;
-    packet.vx = vx;
-    packet.vy = vy;
-    packet.vz = vz;
-    packet.hdg = hdg;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_GLOBAL_POSITION_INT;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_MIN_LEN, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_MIN_LEN, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
-#endif
 }
 
 /**
@@ -178,7 +156,7 @@ static inline uint16_t mavlink_msg_global_position_int_pack_status(uint8_t syste
  * @param lat [degE7] Latitude, expressed
  * @param lon [degE7] Longitude, expressed
  * @param alt [mm] Altitude (MSL). Note that virtually all GPS modules provide both WGS84 and MSL.
- * @param relative_alt [mm] Altitude above home
+ * @param relative_alt [mm] Altitude above ground
  * @param vx [cm/s] Ground X Speed (Latitude, positive north)
  * @param vy [cm/s] Ground Y Speed (Longitude, positive east)
  * @param vz [cm/s] Ground Z Speed (Altitude, positive down)
@@ -189,6 +167,27 @@ static inline uint16_t mavlink_msg_global_position_int_pack_chan(uint8_t system_
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,int32_t lat,int32_t lon,int32_t alt,int32_t relative_alt,int16_t vx,int16_t vy,int16_t vz,uint16_t hdg)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -214,7 +213,16 @@ static inline uint16_t mavlink_msg_global_position_int_pack_chan(uint8_t system_
     packet.vz = vz;
     packet.hdg = hdg;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_global_position_int_t* global_position_int_final = (mavlink_global_position_int_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), global_position_int_final, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GLOBAL_POSITION_INT;
@@ -249,20 +257,6 @@ static inline uint16_t mavlink_msg_global_position_int_encode_chan(uint8_t syste
 }
 
 /**
- * @brief Encode a global_position_int struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param global_position_int C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_global_position_int_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_global_position_int_t* global_position_int)
-{
-    return mavlink_msg_global_position_int_pack_status(system_id, component_id, _status, msg,  global_position_int->time_boot_ms, global_position_int->lat, global_position_int->lon, global_position_int->alt, global_position_int->relative_alt, global_position_int->vx, global_position_int->vy, global_position_int->vz, global_position_int->hdg);
-}
-
-/**
  * @brief Send a global_position_int message
  * @param chan MAVLink channel to send the message
  *
@@ -270,7 +264,7 @@ static inline uint16_t mavlink_msg_global_position_int_encode_status(uint8_t sys
  * @param lat [degE7] Latitude, expressed
  * @param lon [degE7] Longitude, expressed
  * @param alt [mm] Altitude (MSL). Note that virtually all GPS modules provide both WGS84 and MSL.
- * @param relative_alt [mm] Altitude above home
+ * @param relative_alt [mm] Altitude above ground
  * @param vx [cm/s] Ground X Speed (Latitude, positive north)
  * @param vy [cm/s] Ground Y Speed (Longitude, positive east)
  * @param vz [cm/s] Ground Z Speed (Altitude, positive down)
@@ -325,7 +319,7 @@ static inline void mavlink_msg_global_position_int_send_struct(mavlink_channel_t
 
 #if MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -411,7 +405,7 @@ static inline int32_t mavlink_msg_global_position_int_get_alt(const mavlink_mess
 /**
  * @brief Get field relative_alt from global_position_int message
  *
- * @return [mm] Altitude above home
+ * @return [mm] Altitude above ground
  */
 static inline int32_t mavlink_msg_global_position_int_get_relative_alt(const mavlink_message_t* msg)
 {
@@ -466,6 +460,26 @@ static inline uint16_t mavlink_msg_global_position_int_get_hdg(const mavlink_mes
  */
 static inline void mavlink_msg_global_position_int_decode(const mavlink_message_t* msg, mavlink_global_position_int_t* global_position_int)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     global_position_int->time_boot_ms = mavlink_msg_global_position_int_get_time_boot_ms(msg);
     global_position_int->lat = mavlink_msg_global_position_int_get_lat(msg);
@@ -477,8 +491,22 @@ static inline void mavlink_msg_global_position_int_decode(const mavlink_message_
     global_position_int->vz = mavlink_msg_global_position_int_get_vz(msg);
     global_position_int->hdg = mavlink_msg_global_position_int_get_hdg(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN? msg->len : MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN;
-        memset(global_position_int, 0, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
-    memcpy(global_position_int, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN? msg->len : MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN;
+    memset(global_position_int, 0, MAVLINK_MSG_ID_GLOBAL_POSITION_INT_LEN);
+    memcpy(global_position_int, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(global_position_int, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

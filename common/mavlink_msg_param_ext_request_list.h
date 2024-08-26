@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE PARAM_EXT_REQUEST_LIST PACKING
 
 #define MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST 321
@@ -51,6 +57,26 @@ typedef struct __mavlink_param_ext_request_list_t {
 static inline uint16_t mavlink_msg_param_ext_request_list_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t target_system, uint8_t target_component)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN];
     _mav_put_uint8_t(buf, 0, target_system);
@@ -62,47 +88,20 @@ static inline uint16_t mavlink_msg_param_ext_request_list_pack(uint8_t system_id
     packet.target_system = target_system;
     packet.target_component = target_component;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_param_ext_request_list_t* param_ext_request_list_final = (mavlink_param_ext_request_list_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), param_ext_request_list_final, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_MIN_LEN, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_CRC);
-}
-
-/**
- * @brief Pack a param_ext_request_list message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param target_system  System ID
- * @param target_component  Component ID
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_param_ext_request_list_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t target_system, uint8_t target_component)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN];
-    _mav_put_uint8_t(buf, 0, target_system);
-    _mav_put_uint8_t(buf, 1, target_component);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
-#else
-    mavlink_param_ext_request_list_t packet;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_MIN_LEN, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_MIN_LEN, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
-#endif
 }
 
 /**
@@ -119,6 +118,27 @@ static inline uint16_t mavlink_msg_param_ext_request_list_pack_chan(uint8_t syst
                                mavlink_message_t* msg,
                                    uint8_t target_system,uint8_t target_component)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN];
     _mav_put_uint8_t(buf, 0, target_system);
@@ -130,7 +150,16 @@ static inline uint16_t mavlink_msg_param_ext_request_list_pack_chan(uint8_t syst
     packet.target_system = target_system;
     packet.target_component = target_component;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_param_ext_request_list_t* param_ext_request_list_final = (mavlink_param_ext_request_list_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), param_ext_request_list_final, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST;
@@ -162,20 +191,6 @@ static inline uint16_t mavlink_msg_param_ext_request_list_encode(uint8_t system_
 static inline uint16_t mavlink_msg_param_ext_request_list_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_param_ext_request_list_t* param_ext_request_list)
 {
     return mavlink_msg_param_ext_request_list_pack_chan(system_id, component_id, chan, msg, param_ext_request_list->target_system, param_ext_request_list->target_component);
-}
-
-/**
- * @brief Encode a param_ext_request_list struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param param_ext_request_list C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_param_ext_request_list_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_param_ext_request_list_t* param_ext_request_list)
-{
-    return mavlink_msg_param_ext_request_list_pack_status(system_id, component_id, _status, msg,  param_ext_request_list->target_system, param_ext_request_list->target_component);
 }
 
 /**
@@ -220,7 +235,7 @@ static inline void mavlink_msg_param_ext_request_list_send_struct(mavlink_channe
 
 #if MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -277,12 +292,46 @@ static inline uint8_t mavlink_msg_param_ext_request_list_get_target_component(co
  */
 static inline void mavlink_msg_param_ext_request_list_decode(const mavlink_message_t* msg, mavlink_param_ext_request_list_t* param_ext_request_list)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     param_ext_request_list->target_system = mavlink_msg_param_ext_request_list_get_target_system(msg);
     param_ext_request_list->target_component = mavlink_msg_param_ext_request_list_get_target_component(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN? msg->len : MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN;
-        memset(param_ext_request_list, 0, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
-    memcpy(param_ext_request_list, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN? msg->len : MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN;
+    memset(param_ext_request_list, 0, MAVLINK_MSG_ID_PARAM_EXT_REQUEST_LIST_LEN);
+    memcpy(param_ext_request_list, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(param_ext_request_list, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

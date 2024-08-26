@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE GOPRO_HEARTBEAT PACKING
 
 #define MAVLINK_MSG_ID_GOPRO_HEARTBEAT 215
@@ -55,6 +61,26 @@ typedef struct __mavlink_gopro_heartbeat_t {
 static inline uint16_t mavlink_msg_gopro_heartbeat_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t status, uint8_t capture_mode, uint8_t flags)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN];
     _mav_put_uint8_t(buf, 0, status);
@@ -68,50 +94,20 @@ static inline uint16_t mavlink_msg_gopro_heartbeat_pack(uint8_t system_id, uint8
     packet.capture_mode = capture_mode;
     packet.flags = flags;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gopro_heartbeat_t* gopro_heartbeat_final = (mavlink_gopro_heartbeat_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gopro_heartbeat_final, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GOPRO_HEARTBEAT;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_MIN_LEN, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_CRC);
-}
-
-/**
- * @brief Pack a gopro_heartbeat message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param status  Status.
- * @param capture_mode  Current capture mode.
- * @param flags  Additional status bits.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_gopro_heartbeat_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t status, uint8_t capture_mode, uint8_t flags)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN];
-    _mav_put_uint8_t(buf, 0, status);
-    _mav_put_uint8_t(buf, 1, capture_mode);
-    _mav_put_uint8_t(buf, 2, flags);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
-#else
-    mavlink_gopro_heartbeat_t packet;
-    packet.status = status;
-    packet.capture_mode = capture_mode;
-    packet.flags = flags;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_GOPRO_HEARTBEAT;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_MIN_LEN, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_MIN_LEN, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
-#endif
 }
 
 /**
@@ -129,6 +125,27 @@ static inline uint16_t mavlink_msg_gopro_heartbeat_pack_chan(uint8_t system_id, 
                                mavlink_message_t* msg,
                                    uint8_t status,uint8_t capture_mode,uint8_t flags)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN];
     _mav_put_uint8_t(buf, 0, status);
@@ -142,7 +159,16 @@ static inline uint16_t mavlink_msg_gopro_heartbeat_pack_chan(uint8_t system_id, 
     packet.capture_mode = capture_mode;
     packet.flags = flags;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gopro_heartbeat_t* gopro_heartbeat_final = (mavlink_gopro_heartbeat_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gopro_heartbeat_final, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GOPRO_HEARTBEAT;
@@ -174,20 +200,6 @@ static inline uint16_t mavlink_msg_gopro_heartbeat_encode(uint8_t system_id, uin
 static inline uint16_t mavlink_msg_gopro_heartbeat_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_gopro_heartbeat_t* gopro_heartbeat)
 {
     return mavlink_msg_gopro_heartbeat_pack_chan(system_id, component_id, chan, msg, gopro_heartbeat->status, gopro_heartbeat->capture_mode, gopro_heartbeat->flags);
-}
-
-/**
- * @brief Encode a gopro_heartbeat struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param gopro_heartbeat C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_gopro_heartbeat_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_gopro_heartbeat_t* gopro_heartbeat)
-{
-    return mavlink_msg_gopro_heartbeat_pack_status(system_id, component_id, _status, msg,  gopro_heartbeat->status, gopro_heartbeat->capture_mode, gopro_heartbeat->flags);
 }
 
 /**
@@ -235,7 +247,7 @@ static inline void mavlink_msg_gopro_heartbeat_send_struct(mavlink_channel_t cha
 
 #if MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -304,13 +316,47 @@ static inline uint8_t mavlink_msg_gopro_heartbeat_get_flags(const mavlink_messag
  */
 static inline void mavlink_msg_gopro_heartbeat_decode(const mavlink_message_t* msg, mavlink_gopro_heartbeat_t* gopro_heartbeat)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     gopro_heartbeat->status = mavlink_msg_gopro_heartbeat_get_status(msg);
     gopro_heartbeat->capture_mode = mavlink_msg_gopro_heartbeat_get_capture_mode(msg);
     gopro_heartbeat->flags = mavlink_msg_gopro_heartbeat_get_flags(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN? msg->len : MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN;
-        memset(gopro_heartbeat, 0, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
-    memcpy(gopro_heartbeat, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN? msg->len : MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN;
+    memset(gopro_heartbeat, 0, MAVLINK_MSG_ID_GOPRO_HEARTBEAT_LEN);
+    memcpy(gopro_heartbeat, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(gopro_heartbeat, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE GIMBAL_MANAGER_INFORMATION PACKING
 
 #define MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION 280
@@ -13,7 +19,7 @@ typedef struct __mavlink_gimbal_manager_information_t {
  float pitch_max; /*< [rad] Maximum pitch angle (positive: up, negative: down)*/
  float yaw_min; /*< [rad] Minimum yaw angle (positive: to the right, negative: to the left)*/
  float yaw_max; /*< [rad] Maximum yaw angle (positive: to the right, negative: to the left)*/
- uint8_t gimbal_device_id; /*<  Gimbal device ID that this gimbal manager is responsible for. Component ID of gimbal device (or 1-6 for non-MAVLink gimbal).*/
+ uint8_t gimbal_device_id; /*<  Gimbal device ID that this gimbal manager is responsible for.*/
 } mavlink_gimbal_manager_information_t;
 
 #define MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN 33
@@ -67,7 +73,7 @@ typedef struct __mavlink_gimbal_manager_information_t {
  *
  * @param time_boot_ms [ms] Timestamp (time since system boot).
  * @param cap_flags  Bitmap of gimbal capability flags.
- * @param gimbal_device_id  Gimbal device ID that this gimbal manager is responsible for. Component ID of gimbal device (or 1-6 for non-MAVLink gimbal).
+ * @param gimbal_device_id  Gimbal device ID that this gimbal manager is responsible for.
  * @param roll_min [rad] Minimum hardware roll angle (positive: rolling to the right, negative: rolling to the left)
  * @param roll_max [rad] Maximum hardware roll angle (positive: rolling to the right, negative: rolling to the left)
  * @param pitch_min [rad] Minimum pitch angle (positive: up, negative: down)
@@ -79,6 +85,26 @@ typedef struct __mavlink_gimbal_manager_information_t {
 static inline uint16_t mavlink_msg_gimbal_manager_information_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, uint32_t cap_flags, uint8_t gimbal_device_id, float roll_min, float roll_max, float pitch_min, float pitch_max, float yaw_min, float yaw_max)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -104,68 +130,20 @@ static inline uint16_t mavlink_msg_gimbal_manager_information_pack(uint8_t syste
     packet.yaw_max = yaw_max;
     packet.gimbal_device_id = gimbal_device_id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gimbal_manager_information_t* gimbal_manager_information_final = (mavlink_gimbal_manager_information_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gimbal_manager_information_final, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_CRC);
-}
-
-/**
- * @brief Pack a gimbal_manager_information message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param cap_flags  Bitmap of gimbal capability flags.
- * @param gimbal_device_id  Gimbal device ID that this gimbal manager is responsible for. Component ID of gimbal device (or 1-6 for non-MAVLink gimbal).
- * @param roll_min [rad] Minimum hardware roll angle (positive: rolling to the right, negative: rolling to the left)
- * @param roll_max [rad] Maximum hardware roll angle (positive: rolling to the right, negative: rolling to the left)
- * @param pitch_min [rad] Minimum pitch angle (positive: up, negative: down)
- * @param pitch_max [rad] Maximum pitch angle (positive: up, negative: down)
- * @param yaw_min [rad] Minimum yaw angle (positive: to the right, negative: to the left)
- * @param yaw_max [rad] Maximum yaw angle (positive: to the right, negative: to the left)
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_gimbal_manager_information_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, uint32_t cap_flags, uint8_t gimbal_device_id, float roll_min, float roll_max, float pitch_min, float pitch_max, float yaw_min, float yaw_max)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_uint32_t(buf, 4, cap_flags);
-    _mav_put_float(buf, 8, roll_min);
-    _mav_put_float(buf, 12, roll_max);
-    _mav_put_float(buf, 16, pitch_min);
-    _mav_put_float(buf, 20, pitch_max);
-    _mav_put_float(buf, 24, yaw_min);
-    _mav_put_float(buf, 28, yaw_max);
-    _mav_put_uint8_t(buf, 32, gimbal_device_id);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
-#else
-    mavlink_gimbal_manager_information_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.cap_flags = cap_flags;
-    packet.roll_min = roll_min;
-    packet.roll_max = roll_max;
-    packet.pitch_min = pitch_min;
-    packet.pitch_max = pitch_max;
-    packet.yaw_min = yaw_min;
-    packet.yaw_max = yaw_max;
-    packet.gimbal_device_id = gimbal_device_id;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
-#endif
 }
 
 /**
@@ -176,7 +154,7 @@ static inline uint16_t mavlink_msg_gimbal_manager_information_pack_status(uint8_
  * @param msg The MAVLink message to compress the data into
  * @param time_boot_ms [ms] Timestamp (time since system boot).
  * @param cap_flags  Bitmap of gimbal capability flags.
- * @param gimbal_device_id  Gimbal device ID that this gimbal manager is responsible for. Component ID of gimbal device (or 1-6 for non-MAVLink gimbal).
+ * @param gimbal_device_id  Gimbal device ID that this gimbal manager is responsible for.
  * @param roll_min [rad] Minimum hardware roll angle (positive: rolling to the right, negative: rolling to the left)
  * @param roll_max [rad] Maximum hardware roll angle (positive: rolling to the right, negative: rolling to the left)
  * @param pitch_min [rad] Minimum pitch angle (positive: up, negative: down)
@@ -189,6 +167,27 @@ static inline uint16_t mavlink_msg_gimbal_manager_information_pack_chan(uint8_t 
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,uint32_t cap_flags,uint8_t gimbal_device_id,float roll_min,float roll_max,float pitch_min,float pitch_max,float yaw_min,float yaw_max)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -214,7 +213,16 @@ static inline uint16_t mavlink_msg_gimbal_manager_information_pack_chan(uint8_t 
     packet.yaw_max = yaw_max;
     packet.gimbal_device_id = gimbal_device_id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gimbal_manager_information_t* gimbal_manager_information_final = (mavlink_gimbal_manager_information_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gimbal_manager_information_final, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION;
@@ -249,26 +257,12 @@ static inline uint16_t mavlink_msg_gimbal_manager_information_encode_chan(uint8_
 }
 
 /**
- * @brief Encode a gimbal_manager_information struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param gimbal_manager_information C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_gimbal_manager_information_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_gimbal_manager_information_t* gimbal_manager_information)
-{
-    return mavlink_msg_gimbal_manager_information_pack_status(system_id, component_id, _status, msg,  gimbal_manager_information->time_boot_ms, gimbal_manager_information->cap_flags, gimbal_manager_information->gimbal_device_id, gimbal_manager_information->roll_min, gimbal_manager_information->roll_max, gimbal_manager_information->pitch_min, gimbal_manager_information->pitch_max, gimbal_manager_information->yaw_min, gimbal_manager_information->yaw_max);
-}
-
-/**
  * @brief Send a gimbal_manager_information message
  * @param chan MAVLink channel to send the message
  *
  * @param time_boot_ms [ms] Timestamp (time since system boot).
  * @param cap_flags  Bitmap of gimbal capability flags.
- * @param gimbal_device_id  Gimbal device ID that this gimbal manager is responsible for. Component ID of gimbal device (or 1-6 for non-MAVLink gimbal).
+ * @param gimbal_device_id  Gimbal device ID that this gimbal manager is responsible for.
  * @param roll_min [rad] Minimum hardware roll angle (positive: rolling to the right, negative: rolling to the left)
  * @param roll_max [rad] Maximum hardware roll angle (positive: rolling to the right, negative: rolling to the left)
  * @param pitch_min [rad] Minimum pitch angle (positive: up, negative: down)
@@ -325,7 +319,7 @@ static inline void mavlink_msg_gimbal_manager_information_send_struct(mavlink_ch
 
 #if MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -391,7 +385,7 @@ static inline uint32_t mavlink_msg_gimbal_manager_information_get_cap_flags(cons
 /**
  * @brief Get field gimbal_device_id from gimbal_manager_information message
  *
- * @return  Gimbal device ID that this gimbal manager is responsible for. Component ID of gimbal device (or 1-6 for non-MAVLink gimbal).
+ * @return  Gimbal device ID that this gimbal manager is responsible for.
  */
 static inline uint8_t mavlink_msg_gimbal_manager_information_get_gimbal_device_id(const mavlink_message_t* msg)
 {
@@ -466,6 +460,26 @@ static inline float mavlink_msg_gimbal_manager_information_get_yaw_max(const mav
  */
 static inline void mavlink_msg_gimbal_manager_information_decode(const mavlink_message_t* msg, mavlink_gimbal_manager_information_t* gimbal_manager_information)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     gimbal_manager_information->time_boot_ms = mavlink_msg_gimbal_manager_information_get_time_boot_ms(msg);
     gimbal_manager_information->cap_flags = mavlink_msg_gimbal_manager_information_get_cap_flags(msg);
@@ -477,8 +491,22 @@ static inline void mavlink_msg_gimbal_manager_information_decode(const mavlink_m
     gimbal_manager_information->yaw_max = mavlink_msg_gimbal_manager_information_get_yaw_max(msg);
     gimbal_manager_information->gimbal_device_id = mavlink_msg_gimbal_manager_information_get_gimbal_device_id(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN? msg->len : MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN;
-        memset(gimbal_manager_information, 0, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
-    memcpy(gimbal_manager_information, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN? msg->len : MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN;
+    memset(gimbal_manager_information, 0, MAVLINK_MSG_ID_GIMBAL_MANAGER_INFORMATION_LEN);
+    memcpy(gimbal_manager_information, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(gimbal_manager_information, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

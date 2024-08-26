@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE HIL_ACTUATOR_CONTROLS PACKING
 
 #define MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS 93
@@ -59,6 +65,26 @@ typedef struct __mavlink_hil_actuator_controls_t {
 static inline uint16_t mavlink_msg_hil_actuator_controls_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint64_t time_usec, const float *controls, uint8_t mode, uint64_t flags)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN];
     _mav_put_uint64_t(buf, 0, time_usec);
@@ -72,51 +98,20 @@ static inline uint16_t mavlink_msg_hil_actuator_controls_pack(uint8_t system_id,
     packet.flags = flags;
     packet.mode = mode;
     mav_array_memcpy(packet.controls, controls, sizeof(float)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_hil_actuator_controls_t* hil_actuator_controls_final = (mavlink_hil_actuator_controls_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), hil_actuator_controls_final, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_MIN_LEN, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_CRC);
-}
-
-/**
- * @brief Pack a hil_actuator_controls message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_usec [us] Timestamp (UNIX Epoch time or time since system boot). The receiving end can infer timestamp format (since 1.1.1970 or since system boot) by checking for the magnitude of the number.
- * @param controls  Control outputs -1 .. 1. Channel assignment depends on the simulated hardware.
- * @param mode  System mode. Includes arming state.
- * @param flags  Flags as bitfield, 1: indicate simulation using lockstep.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_hil_actuator_controls_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint64_t time_usec, const float *controls, uint8_t mode, uint64_t flags)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN];
-    _mav_put_uint64_t(buf, 0, time_usec);
-    _mav_put_uint64_t(buf, 8, flags);
-    _mav_put_uint8_t(buf, 80, mode);
-    _mav_put_float_array(buf, 16, controls, 16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
-#else
-    mavlink_hil_actuator_controls_t packet;
-    packet.time_usec = time_usec;
-    packet.flags = flags;
-    packet.mode = mode;
-    mav_array_memcpy(packet.controls, controls, sizeof(float)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_MIN_LEN, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_MIN_LEN, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
-#endif
 }
 
 /**
@@ -135,6 +130,27 @@ static inline uint16_t mavlink_msg_hil_actuator_controls_pack_chan(uint8_t syste
                                mavlink_message_t* msg,
                                    uint64_t time_usec,const float *controls,uint8_t mode,uint64_t flags)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN];
     _mav_put_uint64_t(buf, 0, time_usec);
@@ -148,7 +164,16 @@ static inline uint16_t mavlink_msg_hil_actuator_controls_pack_chan(uint8_t syste
     packet.flags = flags;
     packet.mode = mode;
     mav_array_memcpy(packet.controls, controls, sizeof(float)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_hil_actuator_controls_t* hil_actuator_controls_final = (mavlink_hil_actuator_controls_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), hil_actuator_controls_final, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS;
@@ -180,20 +205,6 @@ static inline uint16_t mavlink_msg_hil_actuator_controls_encode(uint8_t system_i
 static inline uint16_t mavlink_msg_hil_actuator_controls_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_hil_actuator_controls_t* hil_actuator_controls)
 {
     return mavlink_msg_hil_actuator_controls_pack_chan(system_id, component_id, chan, msg, hil_actuator_controls->time_usec, hil_actuator_controls->controls, hil_actuator_controls->mode, hil_actuator_controls->flags);
-}
-
-/**
- * @brief Encode a hil_actuator_controls struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param hil_actuator_controls C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_hil_actuator_controls_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_hil_actuator_controls_t* hil_actuator_controls)
-{
-    return mavlink_msg_hil_actuator_controls_pack_status(system_id, component_id, _status, msg,  hil_actuator_controls->time_usec, hil_actuator_controls->controls, hil_actuator_controls->mode, hil_actuator_controls->flags);
 }
 
 /**
@@ -242,7 +253,7 @@ static inline void mavlink_msg_hil_actuator_controls_send_struct(mavlink_channel
 
 #if MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -321,14 +332,48 @@ static inline uint64_t mavlink_msg_hil_actuator_controls_get_flags(const mavlink
  */
 static inline void mavlink_msg_hil_actuator_controls_decode(const mavlink_message_t* msg, mavlink_hil_actuator_controls_t* hil_actuator_controls)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     hil_actuator_controls->time_usec = mavlink_msg_hil_actuator_controls_get_time_usec(msg);
     hil_actuator_controls->flags = mavlink_msg_hil_actuator_controls_get_flags(msg);
     mavlink_msg_hil_actuator_controls_get_controls(msg, hil_actuator_controls->controls);
     hil_actuator_controls->mode = mavlink_msg_hil_actuator_controls_get_mode(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN? msg->len : MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN;
-        memset(hil_actuator_controls, 0, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
-    memcpy(hil_actuator_controls, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN? msg->len : MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN;
+    memset(hil_actuator_controls, 0, MAVLINK_MSG_ID_HIL_ACTUATOR_CONTROLS_LEN);
+    memcpy(hil_actuator_controls, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(hil_actuator_controls, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

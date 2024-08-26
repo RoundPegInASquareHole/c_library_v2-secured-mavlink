@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE MESSAGE_INTERVAL PACKING
 
 #define MAVLINK_MSG_ID_MESSAGE_INTERVAL 244
@@ -51,6 +57,26 @@ typedef struct __mavlink_message_interval_t {
 static inline uint16_t mavlink_msg_message_interval_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint16_t message_id, int32_t interval_us)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN];
     _mav_put_int32_t(buf, 0, interval_us);
@@ -62,47 +88,20 @@ static inline uint16_t mavlink_msg_message_interval_pack(uint8_t system_id, uint
     packet.interval_us = interval_us;
     packet.message_id = message_id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_message_interval_t* message_interval_final = (mavlink_message_interval_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), message_interval_final, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_MESSAGE_INTERVAL;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_MESSAGE_INTERVAL_MIN_LEN, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN, MAVLINK_MSG_ID_MESSAGE_INTERVAL_CRC);
-}
-
-/**
- * @brief Pack a message_interval message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param message_id  The ID of the requested MAVLink message. v1.0 is limited to 254 messages.
- * @param interval_us [us] The interval between two messages. A value of -1 indicates this stream is disabled, 0 indicates it is not available, > 0 indicates the interval at which it is sent.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_message_interval_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint16_t message_id, int32_t interval_us)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN];
-    _mav_put_int32_t(buf, 0, interval_us);
-    _mav_put_uint16_t(buf, 4, message_id);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
-#else
-    mavlink_message_interval_t packet;
-    packet.interval_us = interval_us;
-    packet.message_id = message_id;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_MESSAGE_INTERVAL;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_MESSAGE_INTERVAL_MIN_LEN, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN, MAVLINK_MSG_ID_MESSAGE_INTERVAL_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_MESSAGE_INTERVAL_MIN_LEN, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
-#endif
 }
 
 /**
@@ -119,6 +118,27 @@ static inline uint16_t mavlink_msg_message_interval_pack_chan(uint8_t system_id,
                                mavlink_message_t* msg,
                                    uint16_t message_id,int32_t interval_us)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN];
     _mav_put_int32_t(buf, 0, interval_us);
@@ -130,7 +150,16 @@ static inline uint16_t mavlink_msg_message_interval_pack_chan(uint8_t system_id,
     packet.interval_us = interval_us;
     packet.message_id = message_id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_message_interval_t* message_interval_final = (mavlink_message_interval_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), message_interval_final, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_MESSAGE_INTERVAL;
@@ -162,20 +191,6 @@ static inline uint16_t mavlink_msg_message_interval_encode(uint8_t system_id, ui
 static inline uint16_t mavlink_msg_message_interval_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_message_interval_t* message_interval)
 {
     return mavlink_msg_message_interval_pack_chan(system_id, component_id, chan, msg, message_interval->message_id, message_interval->interval_us);
-}
-
-/**
- * @brief Encode a message_interval struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param message_interval C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_message_interval_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_message_interval_t* message_interval)
-{
-    return mavlink_msg_message_interval_pack_status(system_id, component_id, _status, msg,  message_interval->message_id, message_interval->interval_us);
 }
 
 /**
@@ -220,7 +235,7 @@ static inline void mavlink_msg_message_interval_send_struct(mavlink_channel_t ch
 
 #if MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -277,12 +292,46 @@ static inline int32_t mavlink_msg_message_interval_get_interval_us(const mavlink
  */
 static inline void mavlink_msg_message_interval_decode(const mavlink_message_t* msg, mavlink_message_interval_t* message_interval)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     message_interval->interval_us = mavlink_msg_message_interval_get_interval_us(msg);
     message_interval->message_id = mavlink_msg_message_interval_get_message_id(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN? msg->len : MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN;
-        memset(message_interval, 0, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
-    memcpy(message_interval, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN? msg->len : MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN;
+    memset(message_interval, 0, MAVLINK_MSG_ID_MESSAGE_INTERVAL_LEN);
+    memcpy(message_interval, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(message_interval, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

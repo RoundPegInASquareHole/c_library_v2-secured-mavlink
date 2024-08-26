@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE OSD_PARAM_SHOW_CONFIG_REPLY PACKING
 
 #define MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY 11036
@@ -71,6 +77,26 @@ typedef struct __mavlink_osd_param_show_config_reply_t {
 static inline uint16_t mavlink_msg_osd_param_show_config_reply_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t request_id, uint8_t result, const char *param_id, uint8_t config_type, float min_value, float max_value, float increment)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN];
     _mav_put_uint32_t(buf, 0, request_id);
@@ -90,60 +116,20 @@ static inline uint16_t mavlink_msg_osd_param_show_config_reply_pack(uint8_t syst
     packet.result = result;
     packet.config_type = config_type;
     mav_array_memcpy(packet.param_id, param_id, sizeof(char)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_osd_param_show_config_reply_t* osd_param_show_config_reply_final = (mavlink_osd_param_show_config_reply_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), osd_param_show_config_reply_final, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_MIN_LEN, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_CRC);
-}
-
-/**
- * @brief Pack a osd_param_show_config_reply message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param request_id  Request ID - copied from request.
- * @param result  Config error type.
- * @param param_id  Onboard parameter id, terminated by NULL if the length is less than 16 human-readable chars and WITHOUT null termination (NULL) byte if the length is exactly 16 chars - applications have to provide 16+1 bytes storage if the ID is stored as string
- * @param config_type  Config type.
- * @param min_value  OSD parameter minimum value.
- * @param max_value  OSD parameter maximum value.
- * @param increment  OSD parameter increment.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_osd_param_show_config_reply_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t request_id, uint8_t result, const char *param_id, uint8_t config_type, float min_value, float max_value, float increment)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN];
-    _mav_put_uint32_t(buf, 0, request_id);
-    _mav_put_float(buf, 4, min_value);
-    _mav_put_float(buf, 8, max_value);
-    _mav_put_float(buf, 12, increment);
-    _mav_put_uint8_t(buf, 16, result);
-    _mav_put_uint8_t(buf, 33, config_type);
-    _mav_put_char_array(buf, 17, param_id, 16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
-#else
-    mavlink_osd_param_show_config_reply_t packet;
-    packet.request_id = request_id;
-    packet.min_value = min_value;
-    packet.max_value = max_value;
-    packet.increment = increment;
-    packet.result = result;
-    packet.config_type = config_type;
-    mav_array_memcpy(packet.param_id, param_id, sizeof(char)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_MIN_LEN, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_MIN_LEN, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
-#endif
 }
 
 /**
@@ -165,6 +151,27 @@ static inline uint16_t mavlink_msg_osd_param_show_config_reply_pack_chan(uint8_t
                                mavlink_message_t* msg,
                                    uint32_t request_id,uint8_t result,const char *param_id,uint8_t config_type,float min_value,float max_value,float increment)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN];
     _mav_put_uint32_t(buf, 0, request_id);
@@ -184,7 +191,16 @@ static inline uint16_t mavlink_msg_osd_param_show_config_reply_pack_chan(uint8_t
     packet.result = result;
     packet.config_type = config_type;
     mav_array_memcpy(packet.param_id, param_id, sizeof(char)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_osd_param_show_config_reply_t* osd_param_show_config_reply_final = (mavlink_osd_param_show_config_reply_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), osd_param_show_config_reply_final, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY;
@@ -216,20 +232,6 @@ static inline uint16_t mavlink_msg_osd_param_show_config_reply_encode(uint8_t sy
 static inline uint16_t mavlink_msg_osd_param_show_config_reply_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_osd_param_show_config_reply_t* osd_param_show_config_reply)
 {
     return mavlink_msg_osd_param_show_config_reply_pack_chan(system_id, component_id, chan, msg, osd_param_show_config_reply->request_id, osd_param_show_config_reply->result, osd_param_show_config_reply->param_id, osd_param_show_config_reply->config_type, osd_param_show_config_reply->min_value, osd_param_show_config_reply->max_value, osd_param_show_config_reply->increment);
-}
-
-/**
- * @brief Encode a osd_param_show_config_reply struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param osd_param_show_config_reply C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_osd_param_show_config_reply_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_osd_param_show_config_reply_t* osd_param_show_config_reply)
-{
-    return mavlink_msg_osd_param_show_config_reply_pack_status(system_id, component_id, _status, msg,  osd_param_show_config_reply->request_id, osd_param_show_config_reply->result, osd_param_show_config_reply->param_id, osd_param_show_config_reply->config_type, osd_param_show_config_reply->min_value, osd_param_show_config_reply->max_value, osd_param_show_config_reply->increment);
 }
 
 /**
@@ -287,7 +289,7 @@ static inline void mavlink_msg_osd_param_show_config_reply_send_struct(mavlink_c
 
 #if MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -402,6 +404,26 @@ static inline float mavlink_msg_osd_param_show_config_reply_get_increment(const 
  */
 static inline void mavlink_msg_osd_param_show_config_reply_decode(const mavlink_message_t* msg, mavlink_osd_param_show_config_reply_t* osd_param_show_config_reply)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     osd_param_show_config_reply->request_id = mavlink_msg_osd_param_show_config_reply_get_request_id(msg);
     osd_param_show_config_reply->min_value = mavlink_msg_osd_param_show_config_reply_get_min_value(msg);
@@ -411,8 +433,22 @@ static inline void mavlink_msg_osd_param_show_config_reply_decode(const mavlink_
     mavlink_msg_osd_param_show_config_reply_get_param_id(msg, osd_param_show_config_reply->param_id);
     osd_param_show_config_reply->config_type = mavlink_msg_osd_param_show_config_reply_get_config_type(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN? msg->len : MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN;
-        memset(osd_param_show_config_reply, 0, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
-    memcpy(osd_param_show_config_reply, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN? msg->len : MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN;
+    memset(osd_param_show_config_reply, 0, MAVLINK_MSG_ID_OSD_PARAM_SHOW_CONFIG_REPLY_LEN);
+    memcpy(osd_param_show_config_reply, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(osd_param_show_config_reply, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

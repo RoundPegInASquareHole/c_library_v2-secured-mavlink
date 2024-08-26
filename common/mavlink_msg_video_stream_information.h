@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE VIDEO_STREAM_INFORMATION PACKING
 
 #define MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION 269
@@ -17,12 +23,11 @@ typedef struct __mavlink_video_stream_information_t {
  uint8_t type; /*<  Type of stream.*/
  char name[32]; /*<  Stream name.*/
  char uri[160]; /*<  Video stream URI (TCP or RTSP URI ground station should connect to) or port number (UDP port ground station should listen to).*/
- uint8_t encoding; /*<  Encoding of stream.*/
 } mavlink_video_stream_information_t;
 
-#define MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN 214
+#define MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN 213
 #define MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN 213
-#define MAVLINK_MSG_ID_269_LEN 214
+#define MAVLINK_MSG_ID_269_LEN 213
 #define MAVLINK_MSG_ID_269_MIN_LEN 213
 
 #define MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_CRC 109
@@ -35,7 +40,7 @@ typedef struct __mavlink_video_stream_information_t {
 #define MAVLINK_MESSAGE_INFO_VIDEO_STREAM_INFORMATION { \
     269, \
     "VIDEO_STREAM_INFORMATION", \
-    13, \
+    12, \
     {  { "stream_id", NULL, MAVLINK_TYPE_UINT8_T, 0, 18, offsetof(mavlink_video_stream_information_t, stream_id) }, \
          { "count", NULL, MAVLINK_TYPE_UINT8_T, 0, 19, offsetof(mavlink_video_stream_information_t, count) }, \
          { "type", NULL, MAVLINK_TYPE_UINT8_T, 0, 20, offsetof(mavlink_video_stream_information_t, type) }, \
@@ -48,13 +53,12 @@ typedef struct __mavlink_video_stream_information_t {
          { "hfov", NULL, MAVLINK_TYPE_UINT16_T, 0, 16, offsetof(mavlink_video_stream_information_t, hfov) }, \
          { "name", NULL, MAVLINK_TYPE_CHAR, 32, 21, offsetof(mavlink_video_stream_information_t, name) }, \
          { "uri", NULL, MAVLINK_TYPE_CHAR, 160, 53, offsetof(mavlink_video_stream_information_t, uri) }, \
-         { "encoding", NULL, MAVLINK_TYPE_UINT8_T, 0, 213, offsetof(mavlink_video_stream_information_t, encoding) }, \
          } \
 }
 #else
 #define MAVLINK_MESSAGE_INFO_VIDEO_STREAM_INFORMATION { \
     "VIDEO_STREAM_INFORMATION", \
-    13, \
+    12, \
     {  { "stream_id", NULL, MAVLINK_TYPE_UINT8_T, 0, 18, offsetof(mavlink_video_stream_information_t, stream_id) }, \
          { "count", NULL, MAVLINK_TYPE_UINT8_T, 0, 19, offsetof(mavlink_video_stream_information_t, count) }, \
          { "type", NULL, MAVLINK_TYPE_UINT8_T, 0, 20, offsetof(mavlink_video_stream_information_t, type) }, \
@@ -67,7 +71,6 @@ typedef struct __mavlink_video_stream_information_t {
          { "hfov", NULL, MAVLINK_TYPE_UINT16_T, 0, 16, offsetof(mavlink_video_stream_information_t, hfov) }, \
          { "name", NULL, MAVLINK_TYPE_CHAR, 32, 21, offsetof(mavlink_video_stream_information_t, name) }, \
          { "uri", NULL, MAVLINK_TYPE_CHAR, 160, 53, offsetof(mavlink_video_stream_information_t, uri) }, \
-         { "encoding", NULL, MAVLINK_TYPE_UINT8_T, 0, 213, offsetof(mavlink_video_stream_information_t, encoding) }, \
          } \
 }
 #endif
@@ -90,12 +93,31 @@ typedef struct __mavlink_video_stream_information_t {
  * @param hfov [deg] Horizontal Field of view.
  * @param name  Stream name.
  * @param uri  Video stream URI (TCP or RTSP URI ground station should connect to) or port number (UDP port ground station should listen to).
- * @param encoding  Encoding of stream.
  * @return length of the message in bytes (excluding serial stream start sign)
  */
 static inline uint16_t mavlink_msg_video_stream_information_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
-                               uint8_t stream_id, uint8_t count, uint8_t type, uint16_t flags, float framerate, uint16_t resolution_h, uint16_t resolution_v, uint32_t bitrate, uint16_t rotation, uint16_t hfov, const char *name, const char *uri, uint8_t encoding)
+                               uint8_t stream_id, uint8_t count, uint8_t type, uint16_t flags, float framerate, uint16_t resolution_h, uint16_t resolution_v, uint32_t bitrate, uint16_t rotation, uint16_t hfov, const char *name, const char *uri)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN];
     _mav_put_float(buf, 0, framerate);
@@ -108,7 +130,6 @@ static inline uint16_t mavlink_msg_video_stream_information_pack(uint8_t system_
     _mav_put_uint8_t(buf, 18, stream_id);
     _mav_put_uint8_t(buf, 19, count);
     _mav_put_uint8_t(buf, 20, type);
-    _mav_put_uint8_t(buf, 213, encoding);
     _mav_put_char_array(buf, 21, name, 32);
     _mav_put_char_array(buf, 53, uri, 160);
         memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
@@ -124,81 +145,22 @@ static inline uint16_t mavlink_msg_video_stream_information_pack(uint8_t system_
     packet.stream_id = stream_id;
     packet.count = count;
     packet.type = type;
-    packet.encoding = encoding;
     mav_array_memcpy(packet.name, name, sizeof(char)*32);
     mav_array_memcpy(packet.uri, uri, sizeof(char)*160);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_video_stream_information_t* video_stream_information_final = (mavlink_video_stream_information_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), video_stream_information_final, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_CRC);
-}
-
-/**
- * @brief Pack a video_stream_information message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param stream_id  Video Stream ID (1 for first, 2 for second, etc.)
- * @param count  Number of streams available.
- * @param type  Type of stream.
- * @param flags  Bitmap of stream status flags.
- * @param framerate [Hz] Frame rate.
- * @param resolution_h [pix] Horizontal resolution.
- * @param resolution_v [pix] Vertical resolution.
- * @param bitrate [bits/s] Bit rate.
- * @param rotation [deg] Video image rotation clockwise.
- * @param hfov [deg] Horizontal Field of view.
- * @param name  Stream name.
- * @param uri  Video stream URI (TCP or RTSP URI ground station should connect to) or port number (UDP port ground station should listen to).
- * @param encoding  Encoding of stream.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_video_stream_information_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t stream_id, uint8_t count, uint8_t type, uint16_t flags, float framerate, uint16_t resolution_h, uint16_t resolution_v, uint32_t bitrate, uint16_t rotation, uint16_t hfov, const char *name, const char *uri, uint8_t encoding)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN];
-    _mav_put_float(buf, 0, framerate);
-    _mav_put_uint32_t(buf, 4, bitrate);
-    _mav_put_uint16_t(buf, 8, flags);
-    _mav_put_uint16_t(buf, 10, resolution_h);
-    _mav_put_uint16_t(buf, 12, resolution_v);
-    _mav_put_uint16_t(buf, 14, rotation);
-    _mav_put_uint16_t(buf, 16, hfov);
-    _mav_put_uint8_t(buf, 18, stream_id);
-    _mav_put_uint8_t(buf, 19, count);
-    _mav_put_uint8_t(buf, 20, type);
-    _mav_put_uint8_t(buf, 213, encoding);
-    _mav_put_char_array(buf, 21, name, 32);
-    _mav_put_char_array(buf, 53, uri, 160);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
-#else
-    mavlink_video_stream_information_t packet;
-    packet.framerate = framerate;
-    packet.bitrate = bitrate;
-    packet.flags = flags;
-    packet.resolution_h = resolution_h;
-    packet.resolution_v = resolution_v;
-    packet.rotation = rotation;
-    packet.hfov = hfov;
-    packet.stream_id = stream_id;
-    packet.count = count;
-    packet.type = type;
-    packet.encoding = encoding;
-    mav_array_memcpy(packet.name, name, sizeof(char)*32);
-    mav_array_memcpy(packet.uri, uri, sizeof(char)*160);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
-#endif
 }
 
 /**
@@ -219,13 +181,33 @@ static inline uint16_t mavlink_msg_video_stream_information_pack_status(uint8_t 
  * @param hfov [deg] Horizontal Field of view.
  * @param name  Stream name.
  * @param uri  Video stream URI (TCP or RTSP URI ground station should connect to) or port number (UDP port ground station should listen to).
- * @param encoding  Encoding of stream.
  * @return length of the message in bytes (excluding serial stream start sign)
  */
 static inline uint16_t mavlink_msg_video_stream_information_pack_chan(uint8_t system_id, uint8_t component_id, uint8_t chan,
                                mavlink_message_t* msg,
-                                   uint8_t stream_id,uint8_t count,uint8_t type,uint16_t flags,float framerate,uint16_t resolution_h,uint16_t resolution_v,uint32_t bitrate,uint16_t rotation,uint16_t hfov,const char *name,const char *uri,uint8_t encoding)
+                                   uint8_t stream_id,uint8_t count,uint8_t type,uint16_t flags,float framerate,uint16_t resolution_h,uint16_t resolution_v,uint32_t bitrate,uint16_t rotation,uint16_t hfov,const char *name,const char *uri)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN];
     _mav_put_float(buf, 0, framerate);
@@ -238,7 +220,6 @@ static inline uint16_t mavlink_msg_video_stream_information_pack_chan(uint8_t sy
     _mav_put_uint8_t(buf, 18, stream_id);
     _mav_put_uint8_t(buf, 19, count);
     _mav_put_uint8_t(buf, 20, type);
-    _mav_put_uint8_t(buf, 213, encoding);
     _mav_put_char_array(buf, 21, name, 32);
     _mav_put_char_array(buf, 53, uri, 160);
         memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
@@ -254,10 +235,18 @@ static inline uint16_t mavlink_msg_video_stream_information_pack_chan(uint8_t sy
     packet.stream_id = stream_id;
     packet.count = count;
     packet.type = type;
-    packet.encoding = encoding;
     mav_array_memcpy(packet.name, name, sizeof(char)*32);
     mav_array_memcpy(packet.uri, uri, sizeof(char)*160);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_video_stream_information_t* video_stream_information_final = (mavlink_video_stream_information_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), video_stream_information_final, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION;
@@ -274,7 +263,7 @@ static inline uint16_t mavlink_msg_video_stream_information_pack_chan(uint8_t sy
  */
 static inline uint16_t mavlink_msg_video_stream_information_encode(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg, const mavlink_video_stream_information_t* video_stream_information)
 {
-    return mavlink_msg_video_stream_information_pack(system_id, component_id, msg, video_stream_information->stream_id, video_stream_information->count, video_stream_information->type, video_stream_information->flags, video_stream_information->framerate, video_stream_information->resolution_h, video_stream_information->resolution_v, video_stream_information->bitrate, video_stream_information->rotation, video_stream_information->hfov, video_stream_information->name, video_stream_information->uri, video_stream_information->encoding);
+    return mavlink_msg_video_stream_information_pack(system_id, component_id, msg, video_stream_information->stream_id, video_stream_information->count, video_stream_information->type, video_stream_information->flags, video_stream_information->framerate, video_stream_information->resolution_h, video_stream_information->resolution_v, video_stream_information->bitrate, video_stream_information->rotation, video_stream_information->hfov, video_stream_information->name, video_stream_information->uri);
 }
 
 /**
@@ -288,21 +277,7 @@ static inline uint16_t mavlink_msg_video_stream_information_encode(uint8_t syste
  */
 static inline uint16_t mavlink_msg_video_stream_information_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_video_stream_information_t* video_stream_information)
 {
-    return mavlink_msg_video_stream_information_pack_chan(system_id, component_id, chan, msg, video_stream_information->stream_id, video_stream_information->count, video_stream_information->type, video_stream_information->flags, video_stream_information->framerate, video_stream_information->resolution_h, video_stream_information->resolution_v, video_stream_information->bitrate, video_stream_information->rotation, video_stream_information->hfov, video_stream_information->name, video_stream_information->uri, video_stream_information->encoding);
-}
-
-/**
- * @brief Encode a video_stream_information struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param video_stream_information C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_video_stream_information_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_video_stream_information_t* video_stream_information)
-{
-    return mavlink_msg_video_stream_information_pack_status(system_id, component_id, _status, msg,  video_stream_information->stream_id, video_stream_information->count, video_stream_information->type, video_stream_information->flags, video_stream_information->framerate, video_stream_information->resolution_h, video_stream_information->resolution_v, video_stream_information->bitrate, video_stream_information->rotation, video_stream_information->hfov, video_stream_information->name, video_stream_information->uri, video_stream_information->encoding);
+    return mavlink_msg_video_stream_information_pack_chan(system_id, component_id, chan, msg, video_stream_information->stream_id, video_stream_information->count, video_stream_information->type, video_stream_information->flags, video_stream_information->framerate, video_stream_information->resolution_h, video_stream_information->resolution_v, video_stream_information->bitrate, video_stream_information->rotation, video_stream_information->hfov, video_stream_information->name, video_stream_information->uri);
 }
 
 /**
@@ -321,11 +296,10 @@ static inline uint16_t mavlink_msg_video_stream_information_encode_status(uint8_
  * @param hfov [deg] Horizontal Field of view.
  * @param name  Stream name.
  * @param uri  Video stream URI (TCP or RTSP URI ground station should connect to) or port number (UDP port ground station should listen to).
- * @param encoding  Encoding of stream.
  */
 #ifdef MAVLINK_USE_CONVENIENCE_FUNCTIONS
 
-static inline void mavlink_msg_video_stream_information_send(mavlink_channel_t chan, uint8_t stream_id, uint8_t count, uint8_t type, uint16_t flags, float framerate, uint16_t resolution_h, uint16_t resolution_v, uint32_t bitrate, uint16_t rotation, uint16_t hfov, const char *name, const char *uri, uint8_t encoding)
+static inline void mavlink_msg_video_stream_information_send(mavlink_channel_t chan, uint8_t stream_id, uint8_t count, uint8_t type, uint16_t flags, float framerate, uint16_t resolution_h, uint16_t resolution_v, uint32_t bitrate, uint16_t rotation, uint16_t hfov, const char *name, const char *uri)
 {
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN];
@@ -339,7 +313,6 @@ static inline void mavlink_msg_video_stream_information_send(mavlink_channel_t c
     _mav_put_uint8_t(buf, 18, stream_id);
     _mav_put_uint8_t(buf, 19, count);
     _mav_put_uint8_t(buf, 20, type);
-    _mav_put_uint8_t(buf, 213, encoding);
     _mav_put_char_array(buf, 21, name, 32);
     _mav_put_char_array(buf, 53, uri, 160);
     _mav_finalize_message_chan_send(chan, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION, buf, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_CRC);
@@ -355,7 +328,6 @@ static inline void mavlink_msg_video_stream_information_send(mavlink_channel_t c
     packet.stream_id = stream_id;
     packet.count = count;
     packet.type = type;
-    packet.encoding = encoding;
     mav_array_memcpy(packet.name, name, sizeof(char)*32);
     mav_array_memcpy(packet.uri, uri, sizeof(char)*160);
     _mav_finalize_message_chan_send(chan, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION, (const char *)&packet, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_CRC);
@@ -370,7 +342,7 @@ static inline void mavlink_msg_video_stream_information_send(mavlink_channel_t c
 static inline void mavlink_msg_video_stream_information_send_struct(mavlink_channel_t chan, const mavlink_video_stream_information_t* video_stream_information)
 {
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    mavlink_msg_video_stream_information_send(chan, video_stream_information->stream_id, video_stream_information->count, video_stream_information->type, video_stream_information->flags, video_stream_information->framerate, video_stream_information->resolution_h, video_stream_information->resolution_v, video_stream_information->bitrate, video_stream_information->rotation, video_stream_information->hfov, video_stream_information->name, video_stream_information->uri, video_stream_information->encoding);
+    mavlink_msg_video_stream_information_send(chan, video_stream_information->stream_id, video_stream_information->count, video_stream_information->type, video_stream_information->flags, video_stream_information->framerate, video_stream_information->resolution_h, video_stream_information->resolution_v, video_stream_information->bitrate, video_stream_information->rotation, video_stream_information->hfov, video_stream_information->name, video_stream_information->uri);
 #else
     _mav_finalize_message_chan_send(chan, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION, (const char *)video_stream_information, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_CRC);
 #endif
@@ -378,13 +350,13 @@ static inline void mavlink_msg_video_stream_information_send_struct(mavlink_chan
 
 #if MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
   incoming message with minimum stack space usage.
  */
-static inline void mavlink_msg_video_stream_information_send_buf(mavlink_message_t *msgbuf, mavlink_channel_t chan,  uint8_t stream_id, uint8_t count, uint8_t type, uint16_t flags, float framerate, uint16_t resolution_h, uint16_t resolution_v, uint32_t bitrate, uint16_t rotation, uint16_t hfov, const char *name, const char *uri, uint8_t encoding)
+static inline void mavlink_msg_video_stream_information_send_buf(mavlink_message_t *msgbuf, mavlink_channel_t chan,  uint8_t stream_id, uint8_t count, uint8_t type, uint16_t flags, float framerate, uint16_t resolution_h, uint16_t resolution_v, uint32_t bitrate, uint16_t rotation, uint16_t hfov, const char *name, const char *uri)
 {
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char *buf = (char *)msgbuf;
@@ -398,7 +370,6 @@ static inline void mavlink_msg_video_stream_information_send_buf(mavlink_message
     _mav_put_uint8_t(buf, 18, stream_id);
     _mav_put_uint8_t(buf, 19, count);
     _mav_put_uint8_t(buf, 20, type);
-    _mav_put_uint8_t(buf, 213, encoding);
     _mav_put_char_array(buf, 21, name, 32);
     _mav_put_char_array(buf, 53, uri, 160);
     _mav_finalize_message_chan_send(chan, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION, buf, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_CRC);
@@ -414,7 +385,6 @@ static inline void mavlink_msg_video_stream_information_send_buf(mavlink_message
     packet->stream_id = stream_id;
     packet->count = count;
     packet->type = type;
-    packet->encoding = encoding;
     mav_array_memcpy(packet->name, name, sizeof(char)*32);
     mav_array_memcpy(packet->uri, uri, sizeof(char)*160);
     _mav_finalize_message_chan_send(chan, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION, (const char *)packet, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_CRC);
@@ -548,16 +518,6 @@ static inline uint16_t mavlink_msg_video_stream_information_get_uri(const mavlin
 }
 
 /**
- * @brief Get field encoding from video_stream_information message
- *
- * @return  Encoding of stream.
- */
-static inline uint8_t mavlink_msg_video_stream_information_get_encoding(const mavlink_message_t* msg)
-{
-    return _MAV_RETURN_uint8_t(msg,  213);
-}
-
-/**
  * @brief Decode a video_stream_information message into a struct
  *
  * @param msg The message to decode
@@ -565,6 +525,26 @@ static inline uint8_t mavlink_msg_video_stream_information_get_encoding(const ma
  */
 static inline void mavlink_msg_video_stream_information_decode(const mavlink_message_t* msg, mavlink_video_stream_information_t* video_stream_information)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     video_stream_information->framerate = mavlink_msg_video_stream_information_get_framerate(msg);
     video_stream_information->bitrate = mavlink_msg_video_stream_information_get_bitrate(msg);
@@ -578,10 +558,23 @@ static inline void mavlink_msg_video_stream_information_decode(const mavlink_mes
     video_stream_information->type = mavlink_msg_video_stream_information_get_type(msg);
     mavlink_msg_video_stream_information_get_name(msg, video_stream_information->name);
     mavlink_msg_video_stream_information_get_uri(msg, video_stream_information->uri);
-    video_stream_information->encoding = mavlink_msg_video_stream_information_get_encoding(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN? msg->len : MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN;
-        memset(video_stream_information, 0, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
-    memcpy(video_stream_information, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN? msg->len : MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN;
+    memset(video_stream_information, 0, MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION_LEN);
+    memcpy(video_stream_information, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(video_stream_information, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

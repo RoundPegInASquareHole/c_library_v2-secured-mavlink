@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE WATER_DEPTH PACKING
 
 #define MAVLINK_MSG_ID_WATER_DEPTH 11038
@@ -87,6 +93,26 @@ typedef struct __mavlink_water_depth_t {
 static inline uint16_t mavlink_msg_water_depth_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, uint8_t id, uint8_t healthy, int32_t lat, int32_t lng, float alt, float roll, float pitch, float yaw, float distance, float temperature)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_WATER_DEPTH_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -116,74 +142,20 @@ static inline uint16_t mavlink_msg_water_depth_pack(uint8_t system_id, uint8_t c
     packet.id = id;
     packet.healthy = healthy;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_WATER_DEPTH_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_water_depth_t* water_depth_final = (mavlink_water_depth_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), water_depth_final, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_WATER_DEPTH;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_WATER_DEPTH_MIN_LEN, MAVLINK_MSG_ID_WATER_DEPTH_LEN, MAVLINK_MSG_ID_WATER_DEPTH_CRC);
-}
-
-/**
- * @brief Pack a water_depth message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot)
- * @param id  Onboard ID of the sensor
- * @param healthy  Sensor data healthy (0=unhealthy, 1=healthy)
- * @param lat [degE7] Latitude
- * @param lng [degE7] Longitude
- * @param alt [m] Altitude (MSL) of vehicle
- * @param roll [rad] Roll angle
- * @param pitch [rad] Pitch angle
- * @param yaw [rad] Yaw angle
- * @param distance [m] Distance (uncorrected)
- * @param temperature [degC] Water temperature
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_water_depth_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, uint8_t id, uint8_t healthy, int32_t lat, int32_t lng, float alt, float roll, float pitch, float yaw, float distance, float temperature)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_WATER_DEPTH_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_int32_t(buf, 4, lat);
-    _mav_put_int32_t(buf, 8, lng);
-    _mav_put_float(buf, 12, alt);
-    _mav_put_float(buf, 16, roll);
-    _mav_put_float(buf, 20, pitch);
-    _mav_put_float(buf, 24, yaw);
-    _mav_put_float(buf, 28, distance);
-    _mav_put_float(buf, 32, temperature);
-    _mav_put_uint8_t(buf, 36, id);
-    _mav_put_uint8_t(buf, 37, healthy);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
-#else
-    mavlink_water_depth_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.lat = lat;
-    packet.lng = lng;
-    packet.alt = alt;
-    packet.roll = roll;
-    packet.pitch = pitch;
-    packet.yaw = yaw;
-    packet.distance = distance;
-    packet.temperature = temperature;
-    packet.id = id;
-    packet.healthy = healthy;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_WATER_DEPTH;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_WATER_DEPTH_MIN_LEN, MAVLINK_MSG_ID_WATER_DEPTH_LEN, MAVLINK_MSG_ID_WATER_DEPTH_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_WATER_DEPTH_MIN_LEN, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
-#endif
 }
 
 /**
@@ -209,6 +181,27 @@ static inline uint16_t mavlink_msg_water_depth_pack_chan(uint8_t system_id, uint
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,uint8_t id,uint8_t healthy,int32_t lat,int32_t lng,float alt,float roll,float pitch,float yaw,float distance,float temperature)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_WATER_DEPTH_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -238,7 +231,16 @@ static inline uint16_t mavlink_msg_water_depth_pack_chan(uint8_t system_id, uint
     packet.id = id;
     packet.healthy = healthy;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_WATER_DEPTH_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_water_depth_t* water_depth_final = (mavlink_water_depth_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), water_depth_final, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_WATER_DEPTH;
@@ -270,20 +272,6 @@ static inline uint16_t mavlink_msg_water_depth_encode(uint8_t system_id, uint8_t
 static inline uint16_t mavlink_msg_water_depth_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_water_depth_t* water_depth)
 {
     return mavlink_msg_water_depth_pack_chan(system_id, component_id, chan, msg, water_depth->time_boot_ms, water_depth->id, water_depth->healthy, water_depth->lat, water_depth->lng, water_depth->alt, water_depth->roll, water_depth->pitch, water_depth->yaw, water_depth->distance, water_depth->temperature);
-}
-
-/**
- * @brief Encode a water_depth struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param water_depth C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_water_depth_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_water_depth_t* water_depth)
-{
-    return mavlink_msg_water_depth_pack_status(system_id, component_id, _status, msg,  water_depth->time_boot_ms, water_depth->id, water_depth->healthy, water_depth->lat, water_depth->lng, water_depth->alt, water_depth->roll, water_depth->pitch, water_depth->yaw, water_depth->distance, water_depth->temperature);
 }
 
 /**
@@ -355,7 +343,7 @@ static inline void mavlink_msg_water_depth_send_struct(mavlink_channel_t chan, c
 
 #if MAVLINK_MSG_ID_WATER_DEPTH_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -520,6 +508,26 @@ static inline float mavlink_msg_water_depth_get_temperature(const mavlink_messag
  */
 static inline void mavlink_msg_water_depth_decode(const mavlink_message_t* msg, mavlink_water_depth_t* water_depth)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     water_depth->time_boot_ms = mavlink_msg_water_depth_get_time_boot_ms(msg);
     water_depth->lat = mavlink_msg_water_depth_get_lat(msg);
@@ -533,8 +541,22 @@ static inline void mavlink_msg_water_depth_decode(const mavlink_message_t* msg, 
     water_depth->id = mavlink_msg_water_depth_get_id(msg);
     water_depth->healthy = mavlink_msg_water_depth_get_healthy(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_WATER_DEPTH_LEN? msg->len : MAVLINK_MSG_ID_WATER_DEPTH_LEN;
-        memset(water_depth, 0, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
-    memcpy(water_depth, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_WATER_DEPTH_LEN? msg->len : MAVLINK_MSG_ID_WATER_DEPTH_LEN;
+    memset(water_depth, 0, MAVLINK_MSG_ID_WATER_DEPTH_LEN);
+    memcpy(water_depth, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(water_depth, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

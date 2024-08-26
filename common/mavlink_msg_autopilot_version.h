@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE AUTOPILOT_VERSION PACKING
 
 #define MAVLINK_MSG_ID_AUTOPILOT_VERSION 148
@@ -94,6 +100,26 @@ typedef struct __mavlink_autopilot_version_t {
 static inline uint16_t mavlink_msg_autopilot_version_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint64_t capabilities, uint32_t flight_sw_version, uint32_t middleware_sw_version, uint32_t os_sw_version, uint32_t board_version, const uint8_t *flight_custom_version, const uint8_t *middleware_custom_version, const uint8_t *os_custom_version, uint16_t vendor_id, uint16_t product_id, uint64_t uid, const uint8_t *uid2)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN];
     _mav_put_uint64_t(buf, 0, capabilities);
@@ -123,75 +149,20 @@ static inline uint16_t mavlink_msg_autopilot_version_pack(uint8_t system_id, uin
     mav_array_memcpy(packet.middleware_custom_version, middleware_custom_version, sizeof(uint8_t)*8);
     mav_array_memcpy(packet.os_custom_version, os_custom_version, sizeof(uint8_t)*8);
     mav_array_memcpy(packet.uid2, uid2, sizeof(uint8_t)*18);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_autopilot_version_t* autopilot_version_final = (mavlink_autopilot_version_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), autopilot_version_final, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_AUTOPILOT_VERSION;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_AUTOPILOT_VERSION_MIN_LEN, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN, MAVLINK_MSG_ID_AUTOPILOT_VERSION_CRC);
-}
-
-/**
- * @brief Pack a autopilot_version message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param capabilities  Bitmap of capabilities
- * @param flight_sw_version  Firmware version number
- * @param middleware_sw_version  Middleware version number
- * @param os_sw_version  Operating system version number
- * @param board_version  HW / board version (last 8 bits should be silicon ID, if any). The first 16 bits of this field specify https://github.com/PX4/PX4-Bootloader/blob/master/board_types.txt
- * @param flight_custom_version  Custom version field, commonly the first 8 bytes of the git hash. This is not an unique identifier, but should allow to identify the commit using the main version number even for very large code bases.
- * @param middleware_custom_version  Custom version field, commonly the first 8 bytes of the git hash. This is not an unique identifier, but should allow to identify the commit using the main version number even for very large code bases.
- * @param os_custom_version  Custom version field, commonly the first 8 bytes of the git hash. This is not an unique identifier, but should allow to identify the commit using the main version number even for very large code bases.
- * @param vendor_id  ID of the board vendor
- * @param product_id  ID of the product
- * @param uid  UID if provided by hardware (see uid2)
- * @param uid2  UID if provided by hardware (supersedes the uid field. If this is non-zero, use this field, otherwise use uid)
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_autopilot_version_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint64_t capabilities, uint32_t flight_sw_version, uint32_t middleware_sw_version, uint32_t os_sw_version, uint32_t board_version, const uint8_t *flight_custom_version, const uint8_t *middleware_custom_version, const uint8_t *os_custom_version, uint16_t vendor_id, uint16_t product_id, uint64_t uid, const uint8_t *uid2)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN];
-    _mav_put_uint64_t(buf, 0, capabilities);
-    _mav_put_uint64_t(buf, 8, uid);
-    _mav_put_uint32_t(buf, 16, flight_sw_version);
-    _mav_put_uint32_t(buf, 20, middleware_sw_version);
-    _mav_put_uint32_t(buf, 24, os_sw_version);
-    _mav_put_uint32_t(buf, 28, board_version);
-    _mav_put_uint16_t(buf, 32, vendor_id);
-    _mav_put_uint16_t(buf, 34, product_id);
-    _mav_put_uint8_t_array(buf, 36, flight_custom_version, 8);
-    _mav_put_uint8_t_array(buf, 44, middleware_custom_version, 8);
-    _mav_put_uint8_t_array(buf, 52, os_custom_version, 8);
-    _mav_put_uint8_t_array(buf, 60, uid2, 18);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
-#else
-    mavlink_autopilot_version_t packet;
-    packet.capabilities = capabilities;
-    packet.uid = uid;
-    packet.flight_sw_version = flight_sw_version;
-    packet.middleware_sw_version = middleware_sw_version;
-    packet.os_sw_version = os_sw_version;
-    packet.board_version = board_version;
-    packet.vendor_id = vendor_id;
-    packet.product_id = product_id;
-    mav_array_memcpy(packet.flight_custom_version, flight_custom_version, sizeof(uint8_t)*8);
-    mav_array_memcpy(packet.middleware_custom_version, middleware_custom_version, sizeof(uint8_t)*8);
-    mav_array_memcpy(packet.os_custom_version, os_custom_version, sizeof(uint8_t)*8);
-    mav_array_memcpy(packet.uid2, uid2, sizeof(uint8_t)*18);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_AUTOPILOT_VERSION;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_AUTOPILOT_VERSION_MIN_LEN, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN, MAVLINK_MSG_ID_AUTOPILOT_VERSION_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_AUTOPILOT_VERSION_MIN_LEN, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
-#endif
 }
 
 /**
@@ -218,6 +189,27 @@ static inline uint16_t mavlink_msg_autopilot_version_pack_chan(uint8_t system_id
                                mavlink_message_t* msg,
                                    uint64_t capabilities,uint32_t flight_sw_version,uint32_t middleware_sw_version,uint32_t os_sw_version,uint32_t board_version,const uint8_t *flight_custom_version,const uint8_t *middleware_custom_version,const uint8_t *os_custom_version,uint16_t vendor_id,uint16_t product_id,uint64_t uid,const uint8_t *uid2)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN];
     _mav_put_uint64_t(buf, 0, capabilities);
@@ -247,7 +239,16 @@ static inline uint16_t mavlink_msg_autopilot_version_pack_chan(uint8_t system_id
     mav_array_memcpy(packet.middleware_custom_version, middleware_custom_version, sizeof(uint8_t)*8);
     mav_array_memcpy(packet.os_custom_version, os_custom_version, sizeof(uint8_t)*8);
     mav_array_memcpy(packet.uid2, uid2, sizeof(uint8_t)*18);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_autopilot_version_t* autopilot_version_final = (mavlink_autopilot_version_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), autopilot_version_final, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_AUTOPILOT_VERSION;
@@ -279,20 +280,6 @@ static inline uint16_t mavlink_msg_autopilot_version_encode(uint8_t system_id, u
 static inline uint16_t mavlink_msg_autopilot_version_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_autopilot_version_t* autopilot_version)
 {
     return mavlink_msg_autopilot_version_pack_chan(system_id, component_id, chan, msg, autopilot_version->capabilities, autopilot_version->flight_sw_version, autopilot_version->middleware_sw_version, autopilot_version->os_sw_version, autopilot_version->board_version, autopilot_version->flight_custom_version, autopilot_version->middleware_custom_version, autopilot_version->os_custom_version, autopilot_version->vendor_id, autopilot_version->product_id, autopilot_version->uid, autopilot_version->uid2);
-}
-
-/**
- * @brief Encode a autopilot_version struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param autopilot_version C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_autopilot_version_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_autopilot_version_t* autopilot_version)
-{
-    return mavlink_msg_autopilot_version_pack_status(system_id, component_id, _status, msg,  autopilot_version->capabilities, autopilot_version->flight_sw_version, autopilot_version->middleware_sw_version, autopilot_version->os_sw_version, autopilot_version->board_version, autopilot_version->flight_custom_version, autopilot_version->middleware_custom_version, autopilot_version->os_custom_version, autopilot_version->vendor_id, autopilot_version->product_id, autopilot_version->uid, autopilot_version->uid2);
 }
 
 /**
@@ -365,7 +352,7 @@ static inline void mavlink_msg_autopilot_version_send_struct(mavlink_channel_t c
 
 #if MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -540,6 +527,26 @@ static inline uint16_t mavlink_msg_autopilot_version_get_uid2(const mavlink_mess
  */
 static inline void mavlink_msg_autopilot_version_decode(const mavlink_message_t* msg, mavlink_autopilot_version_t* autopilot_version)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     autopilot_version->capabilities = mavlink_msg_autopilot_version_get_capabilities(msg);
     autopilot_version->uid = mavlink_msg_autopilot_version_get_uid(msg);
@@ -554,8 +561,22 @@ static inline void mavlink_msg_autopilot_version_decode(const mavlink_message_t*
     mavlink_msg_autopilot_version_get_os_custom_version(msg, autopilot_version->os_custom_version);
     mavlink_msg_autopilot_version_get_uid2(msg, autopilot_version->uid2);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN? msg->len : MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN;
-        memset(autopilot_version, 0, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
-    memcpy(autopilot_version, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN? msg->len : MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN;
+    memset(autopilot_version, 0, MAVLINK_MSG_ID_AUTOPILOT_VERSION_LEN);
+    memcpy(autopilot_version, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(autopilot_version, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

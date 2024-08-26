@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE EVENT PACKING
 
 #define MAVLINK_MSG_ID_EVENT 410
@@ -71,6 +77,26 @@ typedef struct __mavlink_event_t {
 static inline uint16_t mavlink_msg_event_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t destination_component, uint8_t destination_system, uint32_t id, uint32_t event_time_boot_ms, uint16_t sequence, uint8_t log_levels, const uint8_t *arguments)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_EVENT_LEN];
     _mav_put_uint32_t(buf, 0, id);
@@ -90,60 +116,20 @@ static inline uint16_t mavlink_msg_event_pack(uint8_t system_id, uint8_t compone
     packet.destination_system = destination_system;
     packet.log_levels = log_levels;
     mav_array_memcpy(packet.arguments, arguments, sizeof(uint8_t)*40);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_EVENT_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_EVENT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_EVENT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_event_t* event_final = (mavlink_event_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), event_final, MAVLINK_MSG_ID_EVENT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_EVENT;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_EVENT_MIN_LEN, MAVLINK_MSG_ID_EVENT_LEN, MAVLINK_MSG_ID_EVENT_CRC);
-}
-
-/**
- * @brief Pack a event message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param destination_component  Component ID
- * @param destination_system  System ID
- * @param id  Event ID (as defined in the component metadata)
- * @param event_time_boot_ms [ms] Timestamp (time since system boot when the event happened).
- * @param sequence  Sequence number.
- * @param log_levels  Log levels: 4 bits MSB: internal (for logging purposes), 4 bits LSB: external. Levels: Emergency = 0, Alert = 1, Critical = 2, Error = 3, Warning = 4, Notice = 5, Info = 6, Debug = 7, Protocol = 8, Disabled = 9
- * @param arguments  Arguments (depend on event ID).
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_event_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t destination_component, uint8_t destination_system, uint32_t id, uint32_t event_time_boot_ms, uint16_t sequence, uint8_t log_levels, const uint8_t *arguments)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_EVENT_LEN];
-    _mav_put_uint32_t(buf, 0, id);
-    _mav_put_uint32_t(buf, 4, event_time_boot_ms);
-    _mav_put_uint16_t(buf, 8, sequence);
-    _mav_put_uint8_t(buf, 10, destination_component);
-    _mav_put_uint8_t(buf, 11, destination_system);
-    _mav_put_uint8_t(buf, 12, log_levels);
-    _mav_put_uint8_t_array(buf, 13, arguments, 40);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_EVENT_LEN);
-#else
-    mavlink_event_t packet;
-    packet.id = id;
-    packet.event_time_boot_ms = event_time_boot_ms;
-    packet.sequence = sequence;
-    packet.destination_component = destination_component;
-    packet.destination_system = destination_system;
-    packet.log_levels = log_levels;
-    mav_array_memcpy(packet.arguments, arguments, sizeof(uint8_t)*40);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_EVENT_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_EVENT;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_EVENT_MIN_LEN, MAVLINK_MSG_ID_EVENT_LEN, MAVLINK_MSG_ID_EVENT_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_EVENT_MIN_LEN, MAVLINK_MSG_ID_EVENT_LEN);
-#endif
 }
 
 /**
@@ -165,6 +151,27 @@ static inline uint16_t mavlink_msg_event_pack_chan(uint8_t system_id, uint8_t co
                                mavlink_message_t* msg,
                                    uint8_t destination_component,uint8_t destination_system,uint32_t id,uint32_t event_time_boot_ms,uint16_t sequence,uint8_t log_levels,const uint8_t *arguments)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_EVENT_LEN];
     _mav_put_uint32_t(buf, 0, id);
@@ -184,7 +191,16 @@ static inline uint16_t mavlink_msg_event_pack_chan(uint8_t system_id, uint8_t co
     packet.destination_system = destination_system;
     packet.log_levels = log_levels;
     mav_array_memcpy(packet.arguments, arguments, sizeof(uint8_t)*40);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_EVENT_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_EVENT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_EVENT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_event_t* event_final = (mavlink_event_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), event_final, MAVLINK_MSG_ID_EVENT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_EVENT;
@@ -216,20 +232,6 @@ static inline uint16_t mavlink_msg_event_encode(uint8_t system_id, uint8_t compo
 static inline uint16_t mavlink_msg_event_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_event_t* event)
 {
     return mavlink_msg_event_pack_chan(system_id, component_id, chan, msg, event->destination_component, event->destination_system, event->id, event->event_time_boot_ms, event->sequence, event->log_levels, event->arguments);
-}
-
-/**
- * @brief Encode a event struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param event C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_event_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_event_t* event)
-{
-    return mavlink_msg_event_pack_status(system_id, component_id, _status, msg,  event->destination_component, event->destination_system, event->id, event->event_time_boot_ms, event->sequence, event->log_levels, event->arguments);
 }
 
 /**
@@ -287,7 +289,7 @@ static inline void mavlink_msg_event_send_struct(mavlink_channel_t chan, const m
 
 #if MAVLINK_MSG_ID_EVENT_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -402,6 +404,26 @@ static inline uint16_t mavlink_msg_event_get_arguments(const mavlink_message_t* 
  */
 static inline void mavlink_msg_event_decode(const mavlink_message_t* msg, mavlink_event_t* event)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     event->id = mavlink_msg_event_get_id(msg);
     event->event_time_boot_ms = mavlink_msg_event_get_event_time_boot_ms(msg);
@@ -411,8 +433,22 @@ static inline void mavlink_msg_event_decode(const mavlink_message_t* msg, mavlin
     event->log_levels = mavlink_msg_event_get_log_levels(msg);
     mavlink_msg_event_get_arguments(msg, event->arguments);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_EVENT_LEN? msg->len : MAVLINK_MSG_ID_EVENT_LEN;
-        memset(event, 0, MAVLINK_MSG_ID_EVENT_LEN);
-    memcpy(event, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_EVENT_LEN? msg->len : MAVLINK_MSG_ID_EVENT_LEN;
+    memset(event, 0, MAVLINK_MSG_ID_EVENT_LEN);
+    memcpy(event, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(event, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

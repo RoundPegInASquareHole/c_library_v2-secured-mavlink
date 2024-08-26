@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE UTM_GLOBAL_POSITION PACKING
 
 #define MAVLINK_MSG_ID_UTM_GLOBAL_POSITION 340
@@ -115,6 +121,26 @@ typedef struct __mavlink_utm_global_position_t {
 static inline uint16_t mavlink_msg_utm_global_position_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint64_t time, const uint8_t *uas_id, int32_t lat, int32_t lon, int32_t alt, int32_t relative_alt, int16_t vx, int16_t vy, int16_t vz, uint16_t h_acc, uint16_t v_acc, uint16_t vel_acc, int32_t next_lat, int32_t next_lon, int32_t next_alt, uint16_t update_rate, uint8_t flight_state, uint8_t flags)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN];
     _mav_put_uint64_t(buf, 0, time);
@@ -156,93 +182,20 @@ static inline uint16_t mavlink_msg_utm_global_position_pack(uint8_t system_id, u
     packet.flight_state = flight_state;
     packet.flags = flags;
     mav_array_memcpy(packet.uas_id, uas_id, sizeof(uint8_t)*18);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_utm_global_position_t* utm_global_position_final = (mavlink_utm_global_position_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), utm_global_position_final, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_UTM_GLOBAL_POSITION;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_MIN_LEN, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_CRC);
-}
-
-/**
- * @brief Pack a utm_global_position message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time [us] Time of applicability of position (microseconds since UNIX epoch).
- * @param uas_id  Unique UAS ID.
- * @param lat [degE7] Latitude (WGS84)
- * @param lon [degE7] Longitude (WGS84)
- * @param alt [mm] Altitude (WGS84)
- * @param relative_alt [mm] Altitude above ground
- * @param vx [cm/s] Ground X speed (latitude, positive north)
- * @param vy [cm/s] Ground Y speed (longitude, positive east)
- * @param vz [cm/s] Ground Z speed (altitude, positive down)
- * @param h_acc [mm] Horizontal position uncertainty (standard deviation)
- * @param v_acc [mm] Altitude uncertainty (standard deviation)
- * @param vel_acc [cm/s] Speed uncertainty (standard deviation)
- * @param next_lat [degE7] Next waypoint, latitude (WGS84)
- * @param next_lon [degE7] Next waypoint, longitude (WGS84)
- * @param next_alt [mm] Next waypoint, altitude (WGS84)
- * @param update_rate [cs] Time until next update. Set to 0 if unknown or in data driven mode.
- * @param flight_state  Flight state
- * @param flags  Bitwise OR combination of the data available flags.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_utm_global_position_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint64_t time, const uint8_t *uas_id, int32_t lat, int32_t lon, int32_t alt, int32_t relative_alt, int16_t vx, int16_t vy, int16_t vz, uint16_t h_acc, uint16_t v_acc, uint16_t vel_acc, int32_t next_lat, int32_t next_lon, int32_t next_alt, uint16_t update_rate, uint8_t flight_state, uint8_t flags)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN];
-    _mav_put_uint64_t(buf, 0, time);
-    _mav_put_int32_t(buf, 8, lat);
-    _mav_put_int32_t(buf, 12, lon);
-    _mav_put_int32_t(buf, 16, alt);
-    _mav_put_int32_t(buf, 20, relative_alt);
-    _mav_put_int32_t(buf, 24, next_lat);
-    _mav_put_int32_t(buf, 28, next_lon);
-    _mav_put_int32_t(buf, 32, next_alt);
-    _mav_put_int16_t(buf, 36, vx);
-    _mav_put_int16_t(buf, 38, vy);
-    _mav_put_int16_t(buf, 40, vz);
-    _mav_put_uint16_t(buf, 42, h_acc);
-    _mav_put_uint16_t(buf, 44, v_acc);
-    _mav_put_uint16_t(buf, 46, vel_acc);
-    _mav_put_uint16_t(buf, 48, update_rate);
-    _mav_put_uint8_t(buf, 68, flight_state);
-    _mav_put_uint8_t(buf, 69, flags);
-    _mav_put_uint8_t_array(buf, 50, uas_id, 18);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
-#else
-    mavlink_utm_global_position_t packet;
-    packet.time = time;
-    packet.lat = lat;
-    packet.lon = lon;
-    packet.alt = alt;
-    packet.relative_alt = relative_alt;
-    packet.next_lat = next_lat;
-    packet.next_lon = next_lon;
-    packet.next_alt = next_alt;
-    packet.vx = vx;
-    packet.vy = vy;
-    packet.vz = vz;
-    packet.h_acc = h_acc;
-    packet.v_acc = v_acc;
-    packet.vel_acc = vel_acc;
-    packet.update_rate = update_rate;
-    packet.flight_state = flight_state;
-    packet.flags = flags;
-    mav_array_memcpy(packet.uas_id, uas_id, sizeof(uint8_t)*18);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_UTM_GLOBAL_POSITION;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_MIN_LEN, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_MIN_LEN, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
-#endif
 }
 
 /**
@@ -275,6 +228,27 @@ static inline uint16_t mavlink_msg_utm_global_position_pack_chan(uint8_t system_
                                mavlink_message_t* msg,
                                    uint64_t time,const uint8_t *uas_id,int32_t lat,int32_t lon,int32_t alt,int32_t relative_alt,int16_t vx,int16_t vy,int16_t vz,uint16_t h_acc,uint16_t v_acc,uint16_t vel_acc,int32_t next_lat,int32_t next_lon,int32_t next_alt,uint16_t update_rate,uint8_t flight_state,uint8_t flags)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN];
     _mav_put_uint64_t(buf, 0, time);
@@ -316,7 +290,16 @@ static inline uint16_t mavlink_msg_utm_global_position_pack_chan(uint8_t system_
     packet.flight_state = flight_state;
     packet.flags = flags;
     mav_array_memcpy(packet.uas_id, uas_id, sizeof(uint8_t)*18);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_utm_global_position_t* utm_global_position_final = (mavlink_utm_global_position_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), utm_global_position_final, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_UTM_GLOBAL_POSITION;
@@ -348,20 +331,6 @@ static inline uint16_t mavlink_msg_utm_global_position_encode(uint8_t system_id,
 static inline uint16_t mavlink_msg_utm_global_position_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_utm_global_position_t* utm_global_position)
 {
     return mavlink_msg_utm_global_position_pack_chan(system_id, component_id, chan, msg, utm_global_position->time, utm_global_position->uas_id, utm_global_position->lat, utm_global_position->lon, utm_global_position->alt, utm_global_position->relative_alt, utm_global_position->vx, utm_global_position->vy, utm_global_position->vz, utm_global_position->h_acc, utm_global_position->v_acc, utm_global_position->vel_acc, utm_global_position->next_lat, utm_global_position->next_lon, utm_global_position->next_alt, utm_global_position->update_rate, utm_global_position->flight_state, utm_global_position->flags);
-}
-
-/**
- * @brief Encode a utm_global_position struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param utm_global_position C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_utm_global_position_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_utm_global_position_t* utm_global_position)
-{
-    return mavlink_msg_utm_global_position_pack_status(system_id, component_id, _status, msg,  utm_global_position->time, utm_global_position->uas_id, utm_global_position->lat, utm_global_position->lon, utm_global_position->alt, utm_global_position->relative_alt, utm_global_position->vx, utm_global_position->vy, utm_global_position->vz, utm_global_position->h_acc, utm_global_position->v_acc, utm_global_position->vel_acc, utm_global_position->next_lat, utm_global_position->next_lon, utm_global_position->next_alt, utm_global_position->update_rate, utm_global_position->flight_state, utm_global_position->flags);
 }
 
 /**
@@ -452,7 +421,7 @@ static inline void mavlink_msg_utm_global_position_send_struct(mavlink_channel_t
 
 #if MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -699,6 +668,26 @@ static inline uint8_t mavlink_msg_utm_global_position_get_flags(const mavlink_me
  */
 static inline void mavlink_msg_utm_global_position_decode(const mavlink_message_t* msg, mavlink_utm_global_position_t* utm_global_position)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     utm_global_position->time = mavlink_msg_utm_global_position_get_time(msg);
     utm_global_position->lat = mavlink_msg_utm_global_position_get_lat(msg);
@@ -719,8 +708,22 @@ static inline void mavlink_msg_utm_global_position_decode(const mavlink_message_
     utm_global_position->flight_state = mavlink_msg_utm_global_position_get_flight_state(msg);
     utm_global_position->flags = mavlink_msg_utm_global_position_get_flags(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN? msg->len : MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN;
-        memset(utm_global_position, 0, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
-    memcpy(utm_global_position, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN? msg->len : MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN;
+    memset(utm_global_position, 0, MAVLINK_MSG_ID_UTM_GLOBAL_POSITION_LEN);
+    memcpy(utm_global_position, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(utm_global_position, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

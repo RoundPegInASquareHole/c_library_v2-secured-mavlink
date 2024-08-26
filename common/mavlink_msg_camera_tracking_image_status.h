@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE CAMERA_TRACKING_IMAGE_STATUS PACKING
 
 #define MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS 275
@@ -83,6 +89,26 @@ typedef struct __mavlink_camera_tracking_image_status_t {
 static inline uint16_t mavlink_msg_camera_tracking_image_status_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t tracking_status, uint8_t tracking_mode, uint8_t target_data, float point_x, float point_y, float radius, float rec_top_x, float rec_top_y, float rec_bottom_x, float rec_bottom_y)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN];
     _mav_put_float(buf, 0, point_x);
@@ -110,71 +136,20 @@ static inline uint16_t mavlink_msg_camera_tracking_image_status_pack(uint8_t sys
     packet.tracking_mode = tracking_mode;
     packet.target_data = target_data;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_camera_tracking_image_status_t* camera_tracking_image_status_final = (mavlink_camera_tracking_image_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), camera_tracking_image_status_final, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_MIN_LEN, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_CRC);
-}
-
-/**
- * @brief Pack a camera_tracking_image_status message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param tracking_status  Current tracking status
- * @param tracking_mode  Current tracking mode
- * @param target_data  Defines location of target data
- * @param point_x  Current tracked point x value if CAMERA_TRACKING_MODE_POINT (normalized 0..1, 0 is left, 1 is right), NAN if unknown
- * @param point_y  Current tracked point y value if CAMERA_TRACKING_MODE_POINT (normalized 0..1, 0 is top, 1 is bottom), NAN if unknown
- * @param radius  Current tracked radius if CAMERA_TRACKING_MODE_POINT (normalized 0..1, 0 is image left, 1 is image right), NAN if unknown
- * @param rec_top_x  Current tracked rectangle top x value if CAMERA_TRACKING_MODE_RECTANGLE (normalized 0..1, 0 is left, 1 is right), NAN if unknown
- * @param rec_top_y  Current tracked rectangle top y value if CAMERA_TRACKING_MODE_RECTANGLE (normalized 0..1, 0 is top, 1 is bottom), NAN if unknown
- * @param rec_bottom_x  Current tracked rectangle bottom x value if CAMERA_TRACKING_MODE_RECTANGLE (normalized 0..1, 0 is left, 1 is right), NAN if unknown
- * @param rec_bottom_y  Current tracked rectangle bottom y value if CAMERA_TRACKING_MODE_RECTANGLE (normalized 0..1, 0 is top, 1 is bottom), NAN if unknown
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_camera_tracking_image_status_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t tracking_status, uint8_t tracking_mode, uint8_t target_data, float point_x, float point_y, float radius, float rec_top_x, float rec_top_y, float rec_bottom_x, float rec_bottom_y)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN];
-    _mav_put_float(buf, 0, point_x);
-    _mav_put_float(buf, 4, point_y);
-    _mav_put_float(buf, 8, radius);
-    _mav_put_float(buf, 12, rec_top_x);
-    _mav_put_float(buf, 16, rec_top_y);
-    _mav_put_float(buf, 20, rec_bottom_x);
-    _mav_put_float(buf, 24, rec_bottom_y);
-    _mav_put_uint8_t(buf, 28, tracking_status);
-    _mav_put_uint8_t(buf, 29, tracking_mode);
-    _mav_put_uint8_t(buf, 30, target_data);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
-#else
-    mavlink_camera_tracking_image_status_t packet;
-    packet.point_x = point_x;
-    packet.point_y = point_y;
-    packet.radius = radius;
-    packet.rec_top_x = rec_top_x;
-    packet.rec_top_y = rec_top_y;
-    packet.rec_bottom_x = rec_bottom_x;
-    packet.rec_bottom_y = rec_bottom_y;
-    packet.tracking_status = tracking_status;
-    packet.tracking_mode = tracking_mode;
-    packet.target_data = target_data;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_MIN_LEN, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_MIN_LEN, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
-#endif
 }
 
 /**
@@ -199,6 +174,27 @@ static inline uint16_t mavlink_msg_camera_tracking_image_status_pack_chan(uint8_
                                mavlink_message_t* msg,
                                    uint8_t tracking_status,uint8_t tracking_mode,uint8_t target_data,float point_x,float point_y,float radius,float rec_top_x,float rec_top_y,float rec_bottom_x,float rec_bottom_y)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN];
     _mav_put_float(buf, 0, point_x);
@@ -226,7 +222,16 @@ static inline uint16_t mavlink_msg_camera_tracking_image_status_pack_chan(uint8_
     packet.tracking_mode = tracking_mode;
     packet.target_data = target_data;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_camera_tracking_image_status_t* camera_tracking_image_status_final = (mavlink_camera_tracking_image_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), camera_tracking_image_status_final, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS;
@@ -258,20 +263,6 @@ static inline uint16_t mavlink_msg_camera_tracking_image_status_encode(uint8_t s
 static inline uint16_t mavlink_msg_camera_tracking_image_status_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_camera_tracking_image_status_t* camera_tracking_image_status)
 {
     return mavlink_msg_camera_tracking_image_status_pack_chan(system_id, component_id, chan, msg, camera_tracking_image_status->tracking_status, camera_tracking_image_status->tracking_mode, camera_tracking_image_status->target_data, camera_tracking_image_status->point_x, camera_tracking_image_status->point_y, camera_tracking_image_status->radius, camera_tracking_image_status->rec_top_x, camera_tracking_image_status->rec_top_y, camera_tracking_image_status->rec_bottom_x, camera_tracking_image_status->rec_bottom_y);
-}
-
-/**
- * @brief Encode a camera_tracking_image_status struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param camera_tracking_image_status C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_camera_tracking_image_status_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_camera_tracking_image_status_t* camera_tracking_image_status)
-{
-    return mavlink_msg_camera_tracking_image_status_pack_status(system_id, component_id, _status, msg,  camera_tracking_image_status->tracking_status, camera_tracking_image_status->tracking_mode, camera_tracking_image_status->target_data, camera_tracking_image_status->point_x, camera_tracking_image_status->point_y, camera_tracking_image_status->radius, camera_tracking_image_status->rec_top_x, camera_tracking_image_status->rec_top_y, camera_tracking_image_status->rec_bottom_x, camera_tracking_image_status->rec_bottom_y);
 }
 
 /**
@@ -340,7 +331,7 @@ static inline void mavlink_msg_camera_tracking_image_status_send_struct(mavlink_
 
 #if MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -493,6 +484,26 @@ static inline float mavlink_msg_camera_tracking_image_status_get_rec_bottom_y(co
  */
 static inline void mavlink_msg_camera_tracking_image_status_decode(const mavlink_message_t* msg, mavlink_camera_tracking_image_status_t* camera_tracking_image_status)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     camera_tracking_image_status->point_x = mavlink_msg_camera_tracking_image_status_get_point_x(msg);
     camera_tracking_image_status->point_y = mavlink_msg_camera_tracking_image_status_get_point_y(msg);
@@ -505,8 +516,22 @@ static inline void mavlink_msg_camera_tracking_image_status_decode(const mavlink
     camera_tracking_image_status->tracking_mode = mavlink_msg_camera_tracking_image_status_get_tracking_mode(msg);
     camera_tracking_image_status->target_data = mavlink_msg_camera_tracking_image_status_get_target_data(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN? msg->len : MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN;
-        memset(camera_tracking_image_status, 0, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
-    memcpy(camera_tracking_image_status, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN? msg->len : MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN;
+    memset(camera_tracking_image_status, 0, MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS_LEN);
+    memcpy(camera_tracking_image_status, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(camera_tracking_image_status, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

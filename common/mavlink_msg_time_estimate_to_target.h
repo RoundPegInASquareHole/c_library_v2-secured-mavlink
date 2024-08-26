@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE TIME_ESTIMATE_TO_TARGET PACKING
 
 #define MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET 380
@@ -63,6 +69,26 @@ typedef struct __mavlink_time_estimate_to_target_t {
 static inline uint16_t mavlink_msg_time_estimate_to_target_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                int32_t safe_return, int32_t land, int32_t mission_next_item, int32_t mission_end, int32_t commanded_action)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN];
     _mav_put_int32_t(buf, 0, safe_return);
@@ -80,56 +106,20 @@ static inline uint16_t mavlink_msg_time_estimate_to_target_pack(uint8_t system_i
     packet.mission_end = mission_end;
     packet.commanded_action = commanded_action;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_time_estimate_to_target_t* time_estimate_to_target_final = (mavlink_time_estimate_to_target_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), time_estimate_to_target_final, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_MIN_LEN, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_CRC);
-}
-
-/**
- * @brief Pack a time_estimate_to_target message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param safe_return [s] Estimated time to complete the vehicle's configured "safe return" action from its current position (e.g. RTL, Smart RTL, etc.). -1 indicates that the vehicle is landed, or that no time estimate available.
- * @param land [s] Estimated time for vehicle to complete the LAND action from its current position. -1 indicates that the vehicle is landed, or that no time estimate available.
- * @param mission_next_item [s] Estimated time for reaching/completing the currently active mission item. -1 means no time estimate available.
- * @param mission_end [s] Estimated time for completing the current mission. -1 means no mission active and/or no estimate available.
- * @param commanded_action [s] Estimated time for completing the current commanded action (i.e. Go To, Takeoff, Land, etc.). -1 means no action active and/or no estimate available.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_time_estimate_to_target_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               int32_t safe_return, int32_t land, int32_t mission_next_item, int32_t mission_end, int32_t commanded_action)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN];
-    _mav_put_int32_t(buf, 0, safe_return);
-    _mav_put_int32_t(buf, 4, land);
-    _mav_put_int32_t(buf, 8, mission_next_item);
-    _mav_put_int32_t(buf, 12, mission_end);
-    _mav_put_int32_t(buf, 16, commanded_action);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
-#else
-    mavlink_time_estimate_to_target_t packet;
-    packet.safe_return = safe_return;
-    packet.land = land;
-    packet.mission_next_item = mission_next_item;
-    packet.mission_end = mission_end;
-    packet.commanded_action = commanded_action;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_MIN_LEN, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_MIN_LEN, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
-#endif
 }
 
 /**
@@ -149,6 +139,27 @@ static inline uint16_t mavlink_msg_time_estimate_to_target_pack_chan(uint8_t sys
                                mavlink_message_t* msg,
                                    int32_t safe_return,int32_t land,int32_t mission_next_item,int32_t mission_end,int32_t commanded_action)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN];
     _mav_put_int32_t(buf, 0, safe_return);
@@ -166,7 +177,16 @@ static inline uint16_t mavlink_msg_time_estimate_to_target_pack_chan(uint8_t sys
     packet.mission_end = mission_end;
     packet.commanded_action = commanded_action;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_time_estimate_to_target_t* time_estimate_to_target_final = (mavlink_time_estimate_to_target_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), time_estimate_to_target_final, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET;
@@ -198,20 +218,6 @@ static inline uint16_t mavlink_msg_time_estimate_to_target_encode(uint8_t system
 static inline uint16_t mavlink_msg_time_estimate_to_target_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_time_estimate_to_target_t* time_estimate_to_target)
 {
     return mavlink_msg_time_estimate_to_target_pack_chan(system_id, component_id, chan, msg, time_estimate_to_target->safe_return, time_estimate_to_target->land, time_estimate_to_target->mission_next_item, time_estimate_to_target->mission_end, time_estimate_to_target->commanded_action);
-}
-
-/**
- * @brief Encode a time_estimate_to_target struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param time_estimate_to_target C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_time_estimate_to_target_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_time_estimate_to_target_t* time_estimate_to_target)
-{
-    return mavlink_msg_time_estimate_to_target_pack_status(system_id, component_id, _status, msg,  time_estimate_to_target->safe_return, time_estimate_to_target->land, time_estimate_to_target->mission_next_item, time_estimate_to_target->mission_end, time_estimate_to_target->commanded_action);
 }
 
 /**
@@ -265,7 +271,7 @@ static inline void mavlink_msg_time_estimate_to_target_send_struct(mavlink_chann
 
 #if MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -358,6 +364,26 @@ static inline int32_t mavlink_msg_time_estimate_to_target_get_commanded_action(c
  */
 static inline void mavlink_msg_time_estimate_to_target_decode(const mavlink_message_t* msg, mavlink_time_estimate_to_target_t* time_estimate_to_target)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     time_estimate_to_target->safe_return = mavlink_msg_time_estimate_to_target_get_safe_return(msg);
     time_estimate_to_target->land = mavlink_msg_time_estimate_to_target_get_land(msg);
@@ -365,8 +391,22 @@ static inline void mavlink_msg_time_estimate_to_target_decode(const mavlink_mess
     time_estimate_to_target->mission_end = mavlink_msg_time_estimate_to_target_get_mission_end(msg);
     time_estimate_to_target->commanded_action = mavlink_msg_time_estimate_to_target_get_commanded_action(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN? msg->len : MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN;
-        memset(time_estimate_to_target, 0, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
-    memcpy(time_estimate_to_target, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN? msg->len : MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN;
+    memset(time_estimate_to_target, 0, MAVLINK_MSG_ID_TIME_ESTIMATE_TO_TARGET_LEN);
+    memcpy(time_estimate_to_target, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(time_estimate_to_target, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE CELLULAR_CONFIG PACKING
 
 #define MAVLINK_MSG_ID_CELLULAR_CONFIG 336
@@ -78,6 +84,26 @@ typedef struct __mavlink_cellular_config_t {
 static inline uint16_t mavlink_msg_cellular_config_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t enable_lte, uint8_t enable_pin, const char *pin, const char *new_pin, const char *apn, const char *puk, uint8_t roaming, uint8_t response)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN];
     _mav_put_uint8_t(buf, 0, enable_lte);
@@ -99,63 +125,20 @@ static inline uint16_t mavlink_msg_cellular_config_pack(uint8_t system_id, uint8
     mav_array_memcpy(packet.new_pin, new_pin, sizeof(char)*16);
     mav_array_memcpy(packet.apn, apn, sizeof(char)*32);
     mav_array_memcpy(packet.puk, puk, sizeof(char)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_cellular_config_t* cellular_config_final = (mavlink_cellular_config_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), cellular_config_final, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_CELLULAR_CONFIG;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_CELLULAR_CONFIG_MIN_LEN, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN, MAVLINK_MSG_ID_CELLULAR_CONFIG_CRC);
-}
-
-/**
- * @brief Pack a cellular_config message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param enable_lte  Enable/disable LTE. 0: setting unchanged, 1: disabled, 2: enabled. Current setting when sent back as a response.
- * @param enable_pin  Enable/disable PIN on the SIM card. 0: setting unchanged, 1: disabled, 2: enabled. Current setting when sent back as a response.
- * @param pin  PIN sent to the SIM card. Blank when PIN is disabled. Empty when message is sent back as a response.
- * @param new_pin  New PIN when changing the PIN. Blank to leave it unchanged. Empty when message is sent back as a response.
- * @param apn  Name of the cellular APN. Blank to leave it unchanged. Current APN when sent back as a response.
- * @param puk  Required PUK code in case the user failed to authenticate 3 times with the PIN. Empty when message is sent back as a response.
- * @param roaming  Enable/disable roaming. 0: setting unchanged, 1: disabled, 2: enabled. Current setting when sent back as a response.
- * @param response  Message acceptance response (sent back to GS).
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_cellular_config_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t enable_lte, uint8_t enable_pin, const char *pin, const char *new_pin, const char *apn, const char *puk, uint8_t roaming, uint8_t response)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN];
-    _mav_put_uint8_t(buf, 0, enable_lte);
-    _mav_put_uint8_t(buf, 1, enable_pin);
-    _mav_put_uint8_t(buf, 82, roaming);
-    _mav_put_uint8_t(buf, 83, response);
-    _mav_put_char_array(buf, 2, pin, 16);
-    _mav_put_char_array(buf, 18, new_pin, 16);
-    _mav_put_char_array(buf, 34, apn, 32);
-    _mav_put_char_array(buf, 66, puk, 16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
-#else
-    mavlink_cellular_config_t packet;
-    packet.enable_lte = enable_lte;
-    packet.enable_pin = enable_pin;
-    packet.roaming = roaming;
-    packet.response = response;
-    mav_array_memcpy(packet.pin, pin, sizeof(char)*16);
-    mav_array_memcpy(packet.new_pin, new_pin, sizeof(char)*16);
-    mav_array_memcpy(packet.apn, apn, sizeof(char)*32);
-    mav_array_memcpy(packet.puk, puk, sizeof(char)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_CELLULAR_CONFIG;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_CELLULAR_CONFIG_MIN_LEN, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN, MAVLINK_MSG_ID_CELLULAR_CONFIG_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_CELLULAR_CONFIG_MIN_LEN, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
-#endif
 }
 
 /**
@@ -178,6 +161,27 @@ static inline uint16_t mavlink_msg_cellular_config_pack_chan(uint8_t system_id, 
                                mavlink_message_t* msg,
                                    uint8_t enable_lte,uint8_t enable_pin,const char *pin,const char *new_pin,const char *apn,const char *puk,uint8_t roaming,uint8_t response)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN];
     _mav_put_uint8_t(buf, 0, enable_lte);
@@ -199,7 +203,16 @@ static inline uint16_t mavlink_msg_cellular_config_pack_chan(uint8_t system_id, 
     mav_array_memcpy(packet.new_pin, new_pin, sizeof(char)*16);
     mav_array_memcpy(packet.apn, apn, sizeof(char)*32);
     mav_array_memcpy(packet.puk, puk, sizeof(char)*16);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_cellular_config_t* cellular_config_final = (mavlink_cellular_config_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), cellular_config_final, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_CELLULAR_CONFIG;
@@ -231,20 +244,6 @@ static inline uint16_t mavlink_msg_cellular_config_encode(uint8_t system_id, uin
 static inline uint16_t mavlink_msg_cellular_config_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_cellular_config_t* cellular_config)
 {
     return mavlink_msg_cellular_config_pack_chan(system_id, component_id, chan, msg, cellular_config->enable_lte, cellular_config->enable_pin, cellular_config->pin, cellular_config->new_pin, cellular_config->apn, cellular_config->puk, cellular_config->roaming, cellular_config->response);
-}
-
-/**
- * @brief Encode a cellular_config struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param cellular_config C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_cellular_config_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_cellular_config_t* cellular_config)
-{
-    return mavlink_msg_cellular_config_pack_status(system_id, component_id, _status, msg,  cellular_config->enable_lte, cellular_config->enable_pin, cellular_config->pin, cellular_config->new_pin, cellular_config->apn, cellular_config->puk, cellular_config->roaming, cellular_config->response);
 }
 
 /**
@@ -305,7 +304,7 @@ static inline void mavlink_msg_cellular_config_send_struct(mavlink_channel_t cha
 
 #if MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -432,6 +431,26 @@ static inline uint8_t mavlink_msg_cellular_config_get_response(const mavlink_mes
  */
 static inline void mavlink_msg_cellular_config_decode(const mavlink_message_t* msg, mavlink_cellular_config_t* cellular_config)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     cellular_config->enable_lte = mavlink_msg_cellular_config_get_enable_lte(msg);
     cellular_config->enable_pin = mavlink_msg_cellular_config_get_enable_pin(msg);
@@ -442,8 +461,22 @@ static inline void mavlink_msg_cellular_config_decode(const mavlink_message_t* m
     cellular_config->roaming = mavlink_msg_cellular_config_get_roaming(msg);
     cellular_config->response = mavlink_msg_cellular_config_get_response(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN? msg->len : MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN;
-        memset(cellular_config, 0, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
-    memcpy(cellular_config, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN? msg->len : MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN;
+    memset(cellular_config, 0, MAVLINK_MSG_ID_CELLULAR_CONFIG_LEN);
+    memcpy(cellular_config, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(cellular_config, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

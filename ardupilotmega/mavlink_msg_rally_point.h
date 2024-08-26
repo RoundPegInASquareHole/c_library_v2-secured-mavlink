@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE RALLY_POINT PACKING
 
 #define MAVLINK_MSG_ID_RALLY_POINT 175
@@ -83,6 +89,26 @@ typedef struct __mavlink_rally_point_t {
 static inline uint16_t mavlink_msg_rally_point_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t target_system, uint8_t target_component, uint8_t idx, uint8_t count, int32_t lat, int32_t lng, int16_t alt, int16_t break_alt, uint16_t land_dir, uint8_t flags)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_RALLY_POINT_LEN];
     _mav_put_int32_t(buf, 0, lat);
@@ -110,71 +136,20 @@ static inline uint16_t mavlink_msg_rally_point_pack(uint8_t system_id, uint8_t c
     packet.count = count;
     packet.flags = flags;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RALLY_POINT_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_RALLY_POINT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_RALLY_POINT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_rally_point_t* rally_point_final = (mavlink_rally_point_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), rally_point_final, MAVLINK_MSG_ID_RALLY_POINT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_RALLY_POINT;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_RALLY_POINT_MIN_LEN, MAVLINK_MSG_ID_RALLY_POINT_LEN, MAVLINK_MSG_ID_RALLY_POINT_CRC);
-}
-
-/**
- * @brief Pack a rally_point message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param target_system  System ID.
- * @param target_component  Component ID.
- * @param idx  Point index (first point is 0).
- * @param count  Total number of points (for sanity checking).
- * @param lat [degE7] Latitude of point.
- * @param lng [degE7] Longitude of point.
- * @param alt [m] Transit / loiter altitude relative to home.
- * @param break_alt [m] Break altitude relative to home.
- * @param land_dir [cdeg] Heading to aim for when landing.
- * @param flags  Configuration flags.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_rally_point_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t target_system, uint8_t target_component, uint8_t idx, uint8_t count, int32_t lat, int32_t lng, int16_t alt, int16_t break_alt, uint16_t land_dir, uint8_t flags)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_RALLY_POINT_LEN];
-    _mav_put_int32_t(buf, 0, lat);
-    _mav_put_int32_t(buf, 4, lng);
-    _mav_put_int16_t(buf, 8, alt);
-    _mav_put_int16_t(buf, 10, break_alt);
-    _mav_put_uint16_t(buf, 12, land_dir);
-    _mav_put_uint8_t(buf, 14, target_system);
-    _mav_put_uint8_t(buf, 15, target_component);
-    _mav_put_uint8_t(buf, 16, idx);
-    _mav_put_uint8_t(buf, 17, count);
-    _mav_put_uint8_t(buf, 18, flags);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_RALLY_POINT_LEN);
-#else
-    mavlink_rally_point_t packet;
-    packet.lat = lat;
-    packet.lng = lng;
-    packet.alt = alt;
-    packet.break_alt = break_alt;
-    packet.land_dir = land_dir;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-    packet.idx = idx;
-    packet.count = count;
-    packet.flags = flags;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RALLY_POINT_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_RALLY_POINT;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_RALLY_POINT_MIN_LEN, MAVLINK_MSG_ID_RALLY_POINT_LEN, MAVLINK_MSG_ID_RALLY_POINT_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_RALLY_POINT_MIN_LEN, MAVLINK_MSG_ID_RALLY_POINT_LEN);
-#endif
 }
 
 /**
@@ -199,6 +174,27 @@ static inline uint16_t mavlink_msg_rally_point_pack_chan(uint8_t system_id, uint
                                mavlink_message_t* msg,
                                    uint8_t target_system,uint8_t target_component,uint8_t idx,uint8_t count,int32_t lat,int32_t lng,int16_t alt,int16_t break_alt,uint16_t land_dir,uint8_t flags)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_RALLY_POINT_LEN];
     _mav_put_int32_t(buf, 0, lat);
@@ -226,7 +222,16 @@ static inline uint16_t mavlink_msg_rally_point_pack_chan(uint8_t system_id, uint
     packet.count = count;
     packet.flags = flags;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RALLY_POINT_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_RALLY_POINT_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_RALLY_POINT_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_rally_point_t* rally_point_final = (mavlink_rally_point_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), rally_point_final, MAVLINK_MSG_ID_RALLY_POINT_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_RALLY_POINT;
@@ -258,20 +263,6 @@ static inline uint16_t mavlink_msg_rally_point_encode(uint8_t system_id, uint8_t
 static inline uint16_t mavlink_msg_rally_point_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_rally_point_t* rally_point)
 {
     return mavlink_msg_rally_point_pack_chan(system_id, component_id, chan, msg, rally_point->target_system, rally_point->target_component, rally_point->idx, rally_point->count, rally_point->lat, rally_point->lng, rally_point->alt, rally_point->break_alt, rally_point->land_dir, rally_point->flags);
-}
-
-/**
- * @brief Encode a rally_point struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param rally_point C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_rally_point_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_rally_point_t* rally_point)
-{
-    return mavlink_msg_rally_point_pack_status(system_id, component_id, _status, msg,  rally_point->target_system, rally_point->target_component, rally_point->idx, rally_point->count, rally_point->lat, rally_point->lng, rally_point->alt, rally_point->break_alt, rally_point->land_dir, rally_point->flags);
 }
 
 /**
@@ -340,7 +331,7 @@ static inline void mavlink_msg_rally_point_send_struct(mavlink_channel_t chan, c
 
 #if MAVLINK_MSG_ID_RALLY_POINT_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -493,6 +484,26 @@ static inline uint8_t mavlink_msg_rally_point_get_flags(const mavlink_message_t*
  */
 static inline void mavlink_msg_rally_point_decode(const mavlink_message_t* msg, mavlink_rally_point_t* rally_point)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     rally_point->lat = mavlink_msg_rally_point_get_lat(msg);
     rally_point->lng = mavlink_msg_rally_point_get_lng(msg);
@@ -505,8 +516,22 @@ static inline void mavlink_msg_rally_point_decode(const mavlink_message_t* msg, 
     rally_point->count = mavlink_msg_rally_point_get_count(msg);
     rally_point->flags = mavlink_msg_rally_point_get_flags(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_RALLY_POINT_LEN? msg->len : MAVLINK_MSG_ID_RALLY_POINT_LEN;
-        memset(rally_point, 0, MAVLINK_MSG_ID_RALLY_POINT_LEN);
-    memcpy(rally_point, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_RALLY_POINT_LEN? msg->len : MAVLINK_MSG_ID_RALLY_POINT_LEN;
+    memset(rally_point, 0, MAVLINK_MSG_ID_RALLY_POINT_LEN);
+    memcpy(rally_point, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(rally_point, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

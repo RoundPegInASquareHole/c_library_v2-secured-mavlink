@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE PING PACKING
 
 #define MAVLINK_MSG_ID_PING 4
@@ -59,6 +65,26 @@ typedef struct __mavlink_ping_t {
 static inline uint16_t mavlink_msg_ping_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint64_t time_usec, uint32_t seq, uint8_t target_system, uint8_t target_component)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_PING_LEN];
     _mav_put_uint64_t(buf, 0, time_usec);
@@ -74,53 +100,20 @@ static inline uint16_t mavlink_msg_ping_pack(uint8_t system_id, uint8_t componen
     packet.target_system = target_system;
     packet.target_component = target_component;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_PING_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_PING_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_PING_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_ping_t* ping_final = (mavlink_ping_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), ping_final, MAVLINK_MSG_ID_PING_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_PING;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_PING_MIN_LEN, MAVLINK_MSG_ID_PING_LEN, MAVLINK_MSG_ID_PING_CRC);
-}
-
-/**
- * @brief Pack a ping message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_usec [us] Timestamp (UNIX Epoch time or time since system boot). The receiving end can infer timestamp format (since 1.1.1970 or since system boot) by checking for the magnitude of the number.
- * @param seq  PING sequence
- * @param target_system  0: request ping from all receiving systems. If greater than 0: message is a ping response and number is the system id of the requesting system
- * @param target_component  0: request ping from all receiving components. If greater than 0: message is a ping response and number is the component id of the requesting component.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_ping_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint64_t time_usec, uint32_t seq, uint8_t target_system, uint8_t target_component)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_PING_LEN];
-    _mav_put_uint64_t(buf, 0, time_usec);
-    _mav_put_uint32_t(buf, 8, seq);
-    _mav_put_uint8_t(buf, 12, target_system);
-    _mav_put_uint8_t(buf, 13, target_component);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_PING_LEN);
-#else
-    mavlink_ping_t packet;
-    packet.time_usec = time_usec;
-    packet.seq = seq;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_PING_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_PING;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_PING_MIN_LEN, MAVLINK_MSG_ID_PING_LEN, MAVLINK_MSG_ID_PING_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_PING_MIN_LEN, MAVLINK_MSG_ID_PING_LEN);
-#endif
 }
 
 /**
@@ -139,6 +132,27 @@ static inline uint16_t mavlink_msg_ping_pack_chan(uint8_t system_id, uint8_t com
                                mavlink_message_t* msg,
                                    uint64_t time_usec,uint32_t seq,uint8_t target_system,uint8_t target_component)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_PING_LEN];
     _mav_put_uint64_t(buf, 0, time_usec);
@@ -154,7 +168,16 @@ static inline uint16_t mavlink_msg_ping_pack_chan(uint8_t system_id, uint8_t com
     packet.target_system = target_system;
     packet.target_component = target_component;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_PING_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_PING_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_PING_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_ping_t* ping_final = (mavlink_ping_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), ping_final, MAVLINK_MSG_ID_PING_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_PING;
@@ -186,20 +209,6 @@ static inline uint16_t mavlink_msg_ping_encode(uint8_t system_id, uint8_t compon
 static inline uint16_t mavlink_msg_ping_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_ping_t* ping)
 {
     return mavlink_msg_ping_pack_chan(system_id, component_id, chan, msg, ping->time_usec, ping->seq, ping->target_system, ping->target_component);
-}
-
-/**
- * @brief Encode a ping struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param ping C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_ping_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_ping_t* ping)
-{
-    return mavlink_msg_ping_pack_status(system_id, component_id, _status, msg,  ping->time_usec, ping->seq, ping->target_system, ping->target_component);
 }
 
 /**
@@ -250,7 +259,7 @@ static inline void mavlink_msg_ping_send_struct(mavlink_channel_t chan, const ma
 
 #if MAVLINK_MSG_ID_PING_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -331,14 +340,48 @@ static inline uint8_t mavlink_msg_ping_get_target_component(const mavlink_messag
  */
 static inline void mavlink_msg_ping_decode(const mavlink_message_t* msg, mavlink_ping_t* ping)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     ping->time_usec = mavlink_msg_ping_get_time_usec(msg);
     ping->seq = mavlink_msg_ping_get_seq(msg);
     ping->target_system = mavlink_msg_ping_get_target_system(msg);
     ping->target_component = mavlink_msg_ping_get_target_component(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_PING_LEN? msg->len : MAVLINK_MSG_ID_PING_LEN;
-        memset(ping, 0, MAVLINK_MSG_ID_PING_LEN);
-    memcpy(ping, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_PING_LEN? msg->len : MAVLINK_MSG_ID_PING_LEN;
+    memset(ping, 0, MAVLINK_MSG_ID_PING_LEN);
+    memcpy(ping, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(ping, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

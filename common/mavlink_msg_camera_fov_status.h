@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE CAMERA_FOV_STATUS PACKING
 
 #define MAVLINK_MSG_ID_CAMERA_FOV_STATUS 271
@@ -83,6 +89,26 @@ typedef struct __mavlink_camera_fov_status_t {
 static inline uint16_t mavlink_msg_camera_fov_status_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, int32_t lat_camera, int32_t lon_camera, int32_t alt_camera, int32_t lat_image, int32_t lon_image, int32_t alt_image, const float *q, float hfov, float vfov)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -108,69 +134,20 @@ static inline uint16_t mavlink_msg_camera_fov_status_pack(uint8_t system_id, uin
     packet.hfov = hfov;
     packet.vfov = vfov;
     mav_array_memcpy(packet.q, q, sizeof(float)*4);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_camera_fov_status_t* camera_fov_status_final = (mavlink_camera_fov_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), camera_fov_status_final, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_CAMERA_FOV_STATUS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_MIN_LEN, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_CRC);
-}
-
-/**
- * @brief Pack a camera_fov_status message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param lat_camera [degE7] Latitude of camera (INT32_MAX if unknown).
- * @param lon_camera [degE7] Longitude of camera (INT32_MAX if unknown).
- * @param alt_camera [mm] Altitude (MSL) of camera (INT32_MAX if unknown).
- * @param lat_image [degE7] Latitude of center of image (INT32_MAX if unknown, INT32_MIN if at infinity, not intersecting with horizon).
- * @param lon_image [degE7] Longitude of center of image (INT32_MAX if unknown, INT32_MIN if at infinity, not intersecting with horizon).
- * @param alt_image [mm] Altitude (MSL) of center of image (INT32_MAX if unknown, INT32_MIN if at infinity, not intersecting with horizon).
- * @param q  Quaternion of camera orientation (w, x, y, z order, zero-rotation is 1, 0, 0, 0)
- * @param hfov [deg] Horizontal field of view (NaN if unknown).
- * @param vfov [deg] Vertical field of view (NaN if unknown).
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_camera_fov_status_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, int32_t lat_camera, int32_t lon_camera, int32_t alt_camera, int32_t lat_image, int32_t lon_image, int32_t alt_image, const float *q, float hfov, float vfov)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_int32_t(buf, 4, lat_camera);
-    _mav_put_int32_t(buf, 8, lon_camera);
-    _mav_put_int32_t(buf, 12, alt_camera);
-    _mav_put_int32_t(buf, 16, lat_image);
-    _mav_put_int32_t(buf, 20, lon_image);
-    _mav_put_int32_t(buf, 24, alt_image);
-    _mav_put_float(buf, 44, hfov);
-    _mav_put_float(buf, 48, vfov);
-    _mav_put_float_array(buf, 28, q, 4);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
-#else
-    mavlink_camera_fov_status_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.lat_camera = lat_camera;
-    packet.lon_camera = lon_camera;
-    packet.alt_camera = alt_camera;
-    packet.lat_image = lat_image;
-    packet.lon_image = lon_image;
-    packet.alt_image = alt_image;
-    packet.hfov = hfov;
-    packet.vfov = vfov;
-    mav_array_memcpy(packet.q, q, sizeof(float)*4);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_CAMERA_FOV_STATUS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_MIN_LEN, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_MIN_LEN, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
-#endif
 }
 
 /**
@@ -195,6 +172,27 @@ static inline uint16_t mavlink_msg_camera_fov_status_pack_chan(uint8_t system_id
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,int32_t lat_camera,int32_t lon_camera,int32_t alt_camera,int32_t lat_image,int32_t lon_image,int32_t alt_image,const float *q,float hfov,float vfov)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -220,7 +218,16 @@ static inline uint16_t mavlink_msg_camera_fov_status_pack_chan(uint8_t system_id
     packet.hfov = hfov;
     packet.vfov = vfov;
     mav_array_memcpy(packet.q, q, sizeof(float)*4);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_camera_fov_status_t* camera_fov_status_final = (mavlink_camera_fov_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), camera_fov_status_final, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_CAMERA_FOV_STATUS;
@@ -252,20 +259,6 @@ static inline uint16_t mavlink_msg_camera_fov_status_encode(uint8_t system_id, u
 static inline uint16_t mavlink_msg_camera_fov_status_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_camera_fov_status_t* camera_fov_status)
 {
     return mavlink_msg_camera_fov_status_pack_chan(system_id, component_id, chan, msg, camera_fov_status->time_boot_ms, camera_fov_status->lat_camera, camera_fov_status->lon_camera, camera_fov_status->alt_camera, camera_fov_status->lat_image, camera_fov_status->lon_image, camera_fov_status->alt_image, camera_fov_status->q, camera_fov_status->hfov, camera_fov_status->vfov);
-}
-
-/**
- * @brief Encode a camera_fov_status struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param camera_fov_status C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_camera_fov_status_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_camera_fov_status_t* camera_fov_status)
-{
-    return mavlink_msg_camera_fov_status_pack_status(system_id, component_id, _status, msg,  camera_fov_status->time_boot_ms, camera_fov_status->lat_camera, camera_fov_status->lon_camera, camera_fov_status->alt_camera, camera_fov_status->lat_image, camera_fov_status->lon_image, camera_fov_status->alt_image, camera_fov_status->q, camera_fov_status->hfov, camera_fov_status->vfov);
 }
 
 /**
@@ -332,7 +325,7 @@ static inline void mavlink_msg_camera_fov_status_send_struct(mavlink_channel_t c
 
 #if MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -483,6 +476,26 @@ static inline float mavlink_msg_camera_fov_status_get_vfov(const mavlink_message
  */
 static inline void mavlink_msg_camera_fov_status_decode(const mavlink_message_t* msg, mavlink_camera_fov_status_t* camera_fov_status)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     camera_fov_status->time_boot_ms = mavlink_msg_camera_fov_status_get_time_boot_ms(msg);
     camera_fov_status->lat_camera = mavlink_msg_camera_fov_status_get_lat_camera(msg);
@@ -495,8 +508,22 @@ static inline void mavlink_msg_camera_fov_status_decode(const mavlink_message_t*
     camera_fov_status->hfov = mavlink_msg_camera_fov_status_get_hfov(msg);
     camera_fov_status->vfov = mavlink_msg_camera_fov_status_get_vfov(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN? msg->len : MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN;
-        memset(camera_fov_status, 0, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
-    memcpy(camera_fov_status, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN? msg->len : MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN;
+    memset(camera_fov_status, 0, MAVLINK_MSG_ID_CAMERA_FOV_STATUS_LEN);
+    memcpy(camera_fov_status, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(camera_fov_status, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE GIMBAL_MANAGER_SET_PITCHYAW PACKING
 
 #define MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW 287
@@ -75,6 +81,26 @@ typedef struct __mavlink_gimbal_manager_set_pitchyaw_t {
 static inline uint16_t mavlink_msg_gimbal_manager_set_pitchyaw_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t target_system, uint8_t target_component, uint32_t flags, uint8_t gimbal_device_id, float pitch, float yaw, float pitch_rate, float yaw_rate)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN];
     _mav_put_uint32_t(buf, 0, flags);
@@ -98,65 +124,20 @@ static inline uint16_t mavlink_msg_gimbal_manager_set_pitchyaw_pack(uint8_t syst
     packet.target_component = target_component;
     packet.gimbal_device_id = gimbal_device_id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gimbal_manager_set_pitchyaw_t* gimbal_manager_set_pitchyaw_final = (mavlink_gimbal_manager_set_pitchyaw_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gimbal_manager_set_pitchyaw_final, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_MIN_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_CRC);
-}
-
-/**
- * @brief Pack a gimbal_manager_set_pitchyaw message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param target_system  System ID
- * @param target_component  Component ID
- * @param flags  High level gimbal manager flags to use.
- * @param gimbal_device_id  Component ID of gimbal device to address (or 1-6 for non-MAVLink gimbal), 0 for all gimbal device components. Send command multiple times for more than one gimbal (but not all gimbals).
- * @param pitch [rad] Pitch angle (positive: up, negative: down, NaN to be ignored).
- * @param yaw [rad] Yaw angle (positive: to the right, negative: to the left, NaN to be ignored).
- * @param pitch_rate [rad/s] Pitch angular rate (positive: up, negative: down, NaN to be ignored).
- * @param yaw_rate [rad/s] Yaw angular rate (positive: to the right, negative: to the left, NaN to be ignored).
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_gimbal_manager_set_pitchyaw_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t target_system, uint8_t target_component, uint32_t flags, uint8_t gimbal_device_id, float pitch, float yaw, float pitch_rate, float yaw_rate)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN];
-    _mav_put_uint32_t(buf, 0, flags);
-    _mav_put_float(buf, 4, pitch);
-    _mav_put_float(buf, 8, yaw);
-    _mav_put_float(buf, 12, pitch_rate);
-    _mav_put_float(buf, 16, yaw_rate);
-    _mav_put_uint8_t(buf, 20, target_system);
-    _mav_put_uint8_t(buf, 21, target_component);
-    _mav_put_uint8_t(buf, 22, gimbal_device_id);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
-#else
-    mavlink_gimbal_manager_set_pitchyaw_t packet;
-    packet.flags = flags;
-    packet.pitch = pitch;
-    packet.yaw = yaw;
-    packet.pitch_rate = pitch_rate;
-    packet.yaw_rate = yaw_rate;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-    packet.gimbal_device_id = gimbal_device_id;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_MIN_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_MIN_LEN, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
-#endif
 }
 
 /**
@@ -179,6 +160,27 @@ static inline uint16_t mavlink_msg_gimbal_manager_set_pitchyaw_pack_chan(uint8_t
                                mavlink_message_t* msg,
                                    uint8_t target_system,uint8_t target_component,uint32_t flags,uint8_t gimbal_device_id,float pitch,float yaw,float pitch_rate,float yaw_rate)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN];
     _mav_put_uint32_t(buf, 0, flags);
@@ -202,7 +204,16 @@ static inline uint16_t mavlink_msg_gimbal_manager_set_pitchyaw_pack_chan(uint8_t
     packet.target_component = target_component;
     packet.gimbal_device_id = gimbal_device_id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gimbal_manager_set_pitchyaw_t* gimbal_manager_set_pitchyaw_final = (mavlink_gimbal_manager_set_pitchyaw_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gimbal_manager_set_pitchyaw_final, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW;
@@ -234,20 +245,6 @@ static inline uint16_t mavlink_msg_gimbal_manager_set_pitchyaw_encode(uint8_t sy
 static inline uint16_t mavlink_msg_gimbal_manager_set_pitchyaw_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_gimbal_manager_set_pitchyaw_t* gimbal_manager_set_pitchyaw)
 {
     return mavlink_msg_gimbal_manager_set_pitchyaw_pack_chan(system_id, component_id, chan, msg, gimbal_manager_set_pitchyaw->target_system, gimbal_manager_set_pitchyaw->target_component, gimbal_manager_set_pitchyaw->flags, gimbal_manager_set_pitchyaw->gimbal_device_id, gimbal_manager_set_pitchyaw->pitch, gimbal_manager_set_pitchyaw->yaw, gimbal_manager_set_pitchyaw->pitch_rate, gimbal_manager_set_pitchyaw->yaw_rate);
-}
-
-/**
- * @brief Encode a gimbal_manager_set_pitchyaw struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param gimbal_manager_set_pitchyaw C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_gimbal_manager_set_pitchyaw_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_gimbal_manager_set_pitchyaw_t* gimbal_manager_set_pitchyaw)
-{
-    return mavlink_msg_gimbal_manager_set_pitchyaw_pack_status(system_id, component_id, _status, msg,  gimbal_manager_set_pitchyaw->target_system, gimbal_manager_set_pitchyaw->target_component, gimbal_manager_set_pitchyaw->flags, gimbal_manager_set_pitchyaw->gimbal_device_id, gimbal_manager_set_pitchyaw->pitch, gimbal_manager_set_pitchyaw->yaw, gimbal_manager_set_pitchyaw->pitch_rate, gimbal_manager_set_pitchyaw->yaw_rate);
 }
 
 /**
@@ -310,7 +307,7 @@ static inline void mavlink_msg_gimbal_manager_set_pitchyaw_send_struct(mavlink_c
 
 #if MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -439,6 +436,26 @@ static inline float mavlink_msg_gimbal_manager_set_pitchyaw_get_yaw_rate(const m
  */
 static inline void mavlink_msg_gimbal_manager_set_pitchyaw_decode(const mavlink_message_t* msg, mavlink_gimbal_manager_set_pitchyaw_t* gimbal_manager_set_pitchyaw)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     gimbal_manager_set_pitchyaw->flags = mavlink_msg_gimbal_manager_set_pitchyaw_get_flags(msg);
     gimbal_manager_set_pitchyaw->pitch = mavlink_msg_gimbal_manager_set_pitchyaw_get_pitch(msg);
@@ -449,8 +466,22 @@ static inline void mavlink_msg_gimbal_manager_set_pitchyaw_decode(const mavlink_
     gimbal_manager_set_pitchyaw->target_component = mavlink_msg_gimbal_manager_set_pitchyaw_get_target_component(msg);
     gimbal_manager_set_pitchyaw->gimbal_device_id = mavlink_msg_gimbal_manager_set_pitchyaw_get_gimbal_device_id(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN? msg->len : MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN;
-        memset(gimbal_manager_set_pitchyaw, 0, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
-    memcpy(gimbal_manager_set_pitchyaw, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN? msg->len : MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN;
+    memset(gimbal_manager_set_pitchyaw, 0, MAVLINK_MSG_ID_GIMBAL_MANAGER_SET_PITCHYAW_LEN);
+    memcpy(gimbal_manager_set_pitchyaw, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(gimbal_manager_set_pitchyaw, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

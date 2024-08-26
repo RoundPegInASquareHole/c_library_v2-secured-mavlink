@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE LIMITS_STATUS PACKING
 
 #define MAVLINK_MSG_ID_LIMITS_STATUS 167
@@ -79,6 +85,26 @@ typedef struct __mavlink_limits_status_t {
 static inline uint16_t mavlink_msg_limits_status_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t limits_state, uint32_t last_trigger, uint32_t last_action, uint32_t last_recovery, uint32_t last_clear, uint16_t breach_count, uint8_t mods_enabled, uint8_t mods_required, uint8_t mods_triggered)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_LIMITS_STATUS_LEN];
     _mav_put_uint32_t(buf, 0, last_trigger);
@@ -104,68 +130,20 @@ static inline uint16_t mavlink_msg_limits_status_pack(uint8_t system_id, uint8_t
     packet.mods_required = mods_required;
     packet.mods_triggered = mods_triggered;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_LIMITS_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_limits_status_t* limits_status_final = (mavlink_limits_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), limits_status_final, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_LIMITS_STATUS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_LIMITS_STATUS_MIN_LEN, MAVLINK_MSG_ID_LIMITS_STATUS_LEN, MAVLINK_MSG_ID_LIMITS_STATUS_CRC);
-}
-
-/**
- * @brief Pack a limits_status message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param limits_state  State of AP_Limits.
- * @param last_trigger [ms] Time (since boot) of last breach.
- * @param last_action [ms] Time (since boot) of last recovery action.
- * @param last_recovery [ms] Time (since boot) of last successful recovery.
- * @param last_clear [ms] Time (since boot) of last all-clear.
- * @param breach_count  Number of fence breaches.
- * @param mods_enabled  AP_Limit_Module bitfield of enabled modules.
- * @param mods_required  AP_Limit_Module bitfield of required modules.
- * @param mods_triggered  AP_Limit_Module bitfield of triggered modules.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_limits_status_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t limits_state, uint32_t last_trigger, uint32_t last_action, uint32_t last_recovery, uint32_t last_clear, uint16_t breach_count, uint8_t mods_enabled, uint8_t mods_required, uint8_t mods_triggered)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_LIMITS_STATUS_LEN];
-    _mav_put_uint32_t(buf, 0, last_trigger);
-    _mav_put_uint32_t(buf, 4, last_action);
-    _mav_put_uint32_t(buf, 8, last_recovery);
-    _mav_put_uint32_t(buf, 12, last_clear);
-    _mav_put_uint16_t(buf, 16, breach_count);
-    _mav_put_uint8_t(buf, 18, limits_state);
-    _mav_put_uint8_t(buf, 19, mods_enabled);
-    _mav_put_uint8_t(buf, 20, mods_required);
-    _mav_put_uint8_t(buf, 21, mods_triggered);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
-#else
-    mavlink_limits_status_t packet;
-    packet.last_trigger = last_trigger;
-    packet.last_action = last_action;
-    packet.last_recovery = last_recovery;
-    packet.last_clear = last_clear;
-    packet.breach_count = breach_count;
-    packet.limits_state = limits_state;
-    packet.mods_enabled = mods_enabled;
-    packet.mods_required = mods_required;
-    packet.mods_triggered = mods_triggered;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_LIMITS_STATUS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_LIMITS_STATUS_MIN_LEN, MAVLINK_MSG_ID_LIMITS_STATUS_LEN, MAVLINK_MSG_ID_LIMITS_STATUS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_LIMITS_STATUS_MIN_LEN, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
-#endif
 }
 
 /**
@@ -189,6 +167,27 @@ static inline uint16_t mavlink_msg_limits_status_pack_chan(uint8_t system_id, ui
                                mavlink_message_t* msg,
                                    uint8_t limits_state,uint32_t last_trigger,uint32_t last_action,uint32_t last_recovery,uint32_t last_clear,uint16_t breach_count,uint8_t mods_enabled,uint8_t mods_required,uint8_t mods_triggered)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_LIMITS_STATUS_LEN];
     _mav_put_uint32_t(buf, 0, last_trigger);
@@ -214,7 +213,16 @@ static inline uint16_t mavlink_msg_limits_status_pack_chan(uint8_t system_id, ui
     packet.mods_required = mods_required;
     packet.mods_triggered = mods_triggered;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_LIMITS_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_limits_status_t* limits_status_final = (mavlink_limits_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), limits_status_final, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_LIMITS_STATUS;
@@ -246,20 +254,6 @@ static inline uint16_t mavlink_msg_limits_status_encode(uint8_t system_id, uint8
 static inline uint16_t mavlink_msg_limits_status_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_limits_status_t* limits_status)
 {
     return mavlink_msg_limits_status_pack_chan(system_id, component_id, chan, msg, limits_status->limits_state, limits_status->last_trigger, limits_status->last_action, limits_status->last_recovery, limits_status->last_clear, limits_status->breach_count, limits_status->mods_enabled, limits_status->mods_required, limits_status->mods_triggered);
-}
-
-/**
- * @brief Encode a limits_status struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param limits_status C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_limits_status_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_limits_status_t* limits_status)
-{
-    return mavlink_msg_limits_status_pack_status(system_id, component_id, _status, msg,  limits_status->limits_state, limits_status->last_trigger, limits_status->last_action, limits_status->last_recovery, limits_status->last_clear, limits_status->breach_count, limits_status->mods_enabled, limits_status->mods_required, limits_status->mods_triggered);
 }
 
 /**
@@ -325,7 +319,7 @@ static inline void mavlink_msg_limits_status_send_struct(mavlink_channel_t chan,
 
 #if MAVLINK_MSG_ID_LIMITS_STATUS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -466,6 +460,26 @@ static inline uint8_t mavlink_msg_limits_status_get_mods_triggered(const mavlink
  */
 static inline void mavlink_msg_limits_status_decode(const mavlink_message_t* msg, mavlink_limits_status_t* limits_status)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     limits_status->last_trigger = mavlink_msg_limits_status_get_last_trigger(msg);
     limits_status->last_action = mavlink_msg_limits_status_get_last_action(msg);
@@ -477,8 +491,22 @@ static inline void mavlink_msg_limits_status_decode(const mavlink_message_t* msg
     limits_status->mods_required = mavlink_msg_limits_status_get_mods_required(msg);
     limits_status->mods_triggered = mavlink_msg_limits_status_get_mods_triggered(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_LIMITS_STATUS_LEN? msg->len : MAVLINK_MSG_ID_LIMITS_STATUS_LEN;
-        memset(limits_status, 0, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
-    memcpy(limits_status, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_LIMITS_STATUS_LEN? msg->len : MAVLINK_MSG_ID_LIMITS_STATUS_LEN;
+    memset(limits_status, 0, MAVLINK_MSG_ID_LIMITS_STATUS_LEN);
+    memcpy(limits_status, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(limits_status, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

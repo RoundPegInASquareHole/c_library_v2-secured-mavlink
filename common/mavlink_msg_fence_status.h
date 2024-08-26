@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE FENCE_STATUS PACKING
 
 #define MAVLINK_MSG_ID_FENCE_STATUS 162
@@ -63,6 +69,26 @@ typedef struct __mavlink_fence_status_t {
 static inline uint16_t mavlink_msg_fence_status_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t breach_status, uint16_t breach_count, uint8_t breach_type, uint32_t breach_time, uint8_t breach_mitigation)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_FENCE_STATUS_LEN];
     _mav_put_uint32_t(buf, 0, breach_time);
@@ -80,56 +106,20 @@ static inline uint16_t mavlink_msg_fence_status_pack(uint8_t system_id, uint8_t 
     packet.breach_type = breach_type;
     packet.breach_mitigation = breach_mitigation;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_FENCE_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_fence_status_t* fence_status_final = (mavlink_fence_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), fence_status_final, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_FENCE_STATUS;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_FENCE_STATUS_MIN_LEN, MAVLINK_MSG_ID_FENCE_STATUS_LEN, MAVLINK_MSG_ID_FENCE_STATUS_CRC);
-}
-
-/**
- * @brief Pack a fence_status message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param breach_status  Breach status (0 if currently inside fence, 1 if outside).
- * @param breach_count  Number of fence breaches.
- * @param breach_type  Last breach type.
- * @param breach_time [ms] Time (since boot) of last breach.
- * @param breach_mitigation  Active action to prevent fence breach
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_fence_status_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t breach_status, uint16_t breach_count, uint8_t breach_type, uint32_t breach_time, uint8_t breach_mitigation)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_FENCE_STATUS_LEN];
-    _mav_put_uint32_t(buf, 0, breach_time);
-    _mav_put_uint16_t(buf, 4, breach_count);
-    _mav_put_uint8_t(buf, 6, breach_status);
-    _mav_put_uint8_t(buf, 7, breach_type);
-    _mav_put_uint8_t(buf, 8, breach_mitigation);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
-#else
-    mavlink_fence_status_t packet;
-    packet.breach_time = breach_time;
-    packet.breach_count = breach_count;
-    packet.breach_status = breach_status;
-    packet.breach_type = breach_type;
-    packet.breach_mitigation = breach_mitigation;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_FENCE_STATUS;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_FENCE_STATUS_MIN_LEN, MAVLINK_MSG_ID_FENCE_STATUS_LEN, MAVLINK_MSG_ID_FENCE_STATUS_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_FENCE_STATUS_MIN_LEN, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
-#endif
 }
 
 /**
@@ -149,6 +139,27 @@ static inline uint16_t mavlink_msg_fence_status_pack_chan(uint8_t system_id, uin
                                mavlink_message_t* msg,
                                    uint8_t breach_status,uint16_t breach_count,uint8_t breach_type,uint32_t breach_time,uint8_t breach_mitigation)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_FENCE_STATUS_LEN];
     _mav_put_uint32_t(buf, 0, breach_time);
@@ -166,7 +177,16 @@ static inline uint16_t mavlink_msg_fence_status_pack_chan(uint8_t system_id, uin
     packet.breach_type = breach_type;
     packet.breach_mitigation = breach_mitigation;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_FENCE_STATUS_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_fence_status_t* fence_status_final = (mavlink_fence_status_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), fence_status_final, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_FENCE_STATUS;
@@ -198,20 +218,6 @@ static inline uint16_t mavlink_msg_fence_status_encode(uint8_t system_id, uint8_
 static inline uint16_t mavlink_msg_fence_status_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_fence_status_t* fence_status)
 {
     return mavlink_msg_fence_status_pack_chan(system_id, component_id, chan, msg, fence_status->breach_status, fence_status->breach_count, fence_status->breach_type, fence_status->breach_time, fence_status->breach_mitigation);
-}
-
-/**
- * @brief Encode a fence_status struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param fence_status C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_fence_status_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_fence_status_t* fence_status)
-{
-    return mavlink_msg_fence_status_pack_status(system_id, component_id, _status, msg,  fence_status->breach_status, fence_status->breach_count, fence_status->breach_type, fence_status->breach_time, fence_status->breach_mitigation);
 }
 
 /**
@@ -265,7 +271,7 @@ static inline void mavlink_msg_fence_status_send_struct(mavlink_channel_t chan, 
 
 #if MAVLINK_MSG_ID_FENCE_STATUS_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -358,6 +364,26 @@ static inline uint8_t mavlink_msg_fence_status_get_breach_mitigation(const mavli
  */
 static inline void mavlink_msg_fence_status_decode(const mavlink_message_t* msg, mavlink_fence_status_t* fence_status)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     fence_status->breach_time = mavlink_msg_fence_status_get_breach_time(msg);
     fence_status->breach_count = mavlink_msg_fence_status_get_breach_count(msg);
@@ -365,8 +391,22 @@ static inline void mavlink_msg_fence_status_decode(const mavlink_message_t* msg,
     fence_status->breach_type = mavlink_msg_fence_status_get_breach_type(msg);
     fence_status->breach_mitigation = mavlink_msg_fence_status_get_breach_mitigation(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_FENCE_STATUS_LEN? msg->len : MAVLINK_MSG_ID_FENCE_STATUS_LEN;
-        memset(fence_status, 0, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
-    memcpy(fence_status, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_FENCE_STATUS_LEN? msg->len : MAVLINK_MSG_ID_FENCE_STATUS_LEN;
+    memset(fence_status, 0, MAVLINK_MSG_ID_FENCE_STATUS_LEN);
+    memcpy(fence_status, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(fence_status, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE GOPRO_GET_REQUEST PACKING
 
 #define MAVLINK_MSG_ID_GOPRO_GET_REQUEST 216
@@ -55,6 +61,26 @@ typedef struct __mavlink_gopro_get_request_t {
 static inline uint16_t mavlink_msg_gopro_get_request_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint8_t target_system, uint8_t target_component, uint8_t cmd_id)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN];
     _mav_put_uint8_t(buf, 0, target_system);
@@ -68,50 +94,20 @@ static inline uint16_t mavlink_msg_gopro_get_request_pack(uint8_t system_id, uin
     packet.target_component = target_component;
     packet.cmd_id = cmd_id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gopro_get_request_t* gopro_get_request_final = (mavlink_gopro_get_request_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gopro_get_request_final, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GOPRO_GET_REQUEST;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_MIN_LEN, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_CRC);
-}
-
-/**
- * @brief Pack a gopro_get_request message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param target_system  System ID.
- * @param target_component  Component ID.
- * @param cmd_id  Command ID.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_gopro_get_request_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint8_t target_system, uint8_t target_component, uint8_t cmd_id)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN];
-    _mav_put_uint8_t(buf, 0, target_system);
-    _mav_put_uint8_t(buf, 1, target_component);
-    _mav_put_uint8_t(buf, 2, cmd_id);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
-#else
-    mavlink_gopro_get_request_t packet;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-    packet.cmd_id = cmd_id;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_GOPRO_GET_REQUEST;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_MIN_LEN, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_MIN_LEN, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
-#endif
 }
 
 /**
@@ -129,6 +125,27 @@ static inline uint16_t mavlink_msg_gopro_get_request_pack_chan(uint8_t system_id
                                mavlink_message_t* msg,
                                    uint8_t target_system,uint8_t target_component,uint8_t cmd_id)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN];
     _mav_put_uint8_t(buf, 0, target_system);
@@ -142,7 +159,16 @@ static inline uint16_t mavlink_msg_gopro_get_request_pack_chan(uint8_t system_id
     packet.target_component = target_component;
     packet.cmd_id = cmd_id;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_gopro_get_request_t* gopro_get_request_final = (mavlink_gopro_get_request_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), gopro_get_request_final, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_GOPRO_GET_REQUEST;
@@ -174,20 +200,6 @@ static inline uint16_t mavlink_msg_gopro_get_request_encode(uint8_t system_id, u
 static inline uint16_t mavlink_msg_gopro_get_request_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_gopro_get_request_t* gopro_get_request)
 {
     return mavlink_msg_gopro_get_request_pack_chan(system_id, component_id, chan, msg, gopro_get_request->target_system, gopro_get_request->target_component, gopro_get_request->cmd_id);
-}
-
-/**
- * @brief Encode a gopro_get_request struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param gopro_get_request C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_gopro_get_request_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_gopro_get_request_t* gopro_get_request)
-{
-    return mavlink_msg_gopro_get_request_pack_status(system_id, component_id, _status, msg,  gopro_get_request->target_system, gopro_get_request->target_component, gopro_get_request->cmd_id);
 }
 
 /**
@@ -235,7 +247,7 @@ static inline void mavlink_msg_gopro_get_request_send_struct(mavlink_channel_t c
 
 #if MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -304,13 +316,47 @@ static inline uint8_t mavlink_msg_gopro_get_request_get_cmd_id(const mavlink_mes
  */
 static inline void mavlink_msg_gopro_get_request_decode(const mavlink_message_t* msg, mavlink_gopro_get_request_t* gopro_get_request)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     gopro_get_request->target_system = mavlink_msg_gopro_get_request_get_target_system(msg);
     gopro_get_request->target_component = mavlink_msg_gopro_get_request_get_target_component(msg);
     gopro_get_request->cmd_id = mavlink_msg_gopro_get_request_get_cmd_id(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN? msg->len : MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN;
-        memset(gopro_get_request, 0, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
-    memcpy(gopro_get_request, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN? msg->len : MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN;
+    memset(gopro_get_request, 0, MAVLINK_MSG_ID_GOPRO_GET_REQUEST_LEN);
+    memcpy(gopro_get_request, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(gopro_get_request, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

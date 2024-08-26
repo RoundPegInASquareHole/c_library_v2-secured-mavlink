@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE SET_ATTITUDE_TARGET PACKING
 
 #define MAVLINK_MSG_ID_SET_ATTITUDE_TARGET 82
@@ -6,7 +12,7 @@
 MAVPACKED(
 typedef struct __mavlink_set_attitude_target_t {
  uint32_t time_boot_ms; /*< [ms] Timestamp (time since system boot).*/
- float q[4]; /*<  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0) from MAV_FRAME_LOCAL_NED to MAV_FRAME_BODY_FRD*/
+ float q[4]; /*<  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0)*/
  float body_roll_rate; /*< [rad/s] Body roll rate*/
  float body_pitch_rate; /*< [rad/s] Body pitch rate*/
  float body_yaw_rate; /*< [rad/s] Body yaw rate*/
@@ -73,7 +79,7 @@ typedef struct __mavlink_set_attitude_target_t {
  * @param target_system  System ID
  * @param target_component  Component ID
  * @param type_mask  Bitmap to indicate which dimensions should be ignored by the vehicle.
- * @param q  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0) from MAV_FRAME_LOCAL_NED to MAV_FRAME_BODY_FRD
+ * @param q  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0)
  * @param body_roll_rate [rad/s] Body roll rate
  * @param body_pitch_rate [rad/s] Body pitch rate
  * @param body_yaw_rate [rad/s] Body yaw rate
@@ -84,6 +90,26 @@ typedef struct __mavlink_set_attitude_target_t {
 static inline uint16_t mavlink_msg_set_attitude_target_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, uint8_t target_system, uint8_t target_component, uint8_t type_mask, const float *q, float body_roll_rate, float body_pitch_rate, float body_yaw_rate, float thrust, const float *thrust_body)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -109,69 +135,20 @@ static inline uint16_t mavlink_msg_set_attitude_target_pack(uint8_t system_id, u
     packet.type_mask = type_mask;
     mav_array_memcpy(packet.q, q, sizeof(float)*4);
     mav_array_memcpy(packet.thrust_body, thrust_body, sizeof(float)*3);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_set_attitude_target_t* set_attitude_target_final = (mavlink_set_attitude_target_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), set_attitude_target_final, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_SET_ATTITUDE_TARGET;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_MIN_LEN, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_CRC);
-}
-
-/**
- * @brief Pack a set_attitude_target message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param target_system  System ID
- * @param target_component  Component ID
- * @param type_mask  Bitmap to indicate which dimensions should be ignored by the vehicle.
- * @param q  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0) from MAV_FRAME_LOCAL_NED to MAV_FRAME_BODY_FRD
- * @param body_roll_rate [rad/s] Body roll rate
- * @param body_pitch_rate [rad/s] Body pitch rate
- * @param body_yaw_rate [rad/s] Body yaw rate
- * @param thrust  Collective thrust, normalized to 0 .. 1 (-1 .. 1 for vehicles capable of reverse trust)
- * @param thrust_body  3D thrust setpoint in the body NED frame, normalized to -1 .. 1
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_set_attitude_target_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, uint8_t target_system, uint8_t target_component, uint8_t type_mask, const float *q, float body_roll_rate, float body_pitch_rate, float body_yaw_rate, float thrust, const float *thrust_body)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_float(buf, 20, body_roll_rate);
-    _mav_put_float(buf, 24, body_pitch_rate);
-    _mav_put_float(buf, 28, body_yaw_rate);
-    _mav_put_float(buf, 32, thrust);
-    _mav_put_uint8_t(buf, 36, target_system);
-    _mav_put_uint8_t(buf, 37, target_component);
-    _mav_put_uint8_t(buf, 38, type_mask);
-    _mav_put_float_array(buf, 4, q, 4);
-    _mav_put_float_array(buf, 39, thrust_body, 3);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
-#else
-    mavlink_set_attitude_target_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.body_roll_rate = body_roll_rate;
-    packet.body_pitch_rate = body_pitch_rate;
-    packet.body_yaw_rate = body_yaw_rate;
-    packet.thrust = thrust;
-    packet.target_system = target_system;
-    packet.target_component = target_component;
-    packet.type_mask = type_mask;
-    mav_array_memcpy(packet.q, q, sizeof(float)*4);
-    mav_array_memcpy(packet.thrust_body, thrust_body, sizeof(float)*3);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_SET_ATTITUDE_TARGET;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_MIN_LEN, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_MIN_LEN, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
-#endif
 }
 
 /**
@@ -184,7 +161,7 @@ static inline uint16_t mavlink_msg_set_attitude_target_pack_status(uint8_t syste
  * @param target_system  System ID
  * @param target_component  Component ID
  * @param type_mask  Bitmap to indicate which dimensions should be ignored by the vehicle.
- * @param q  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0) from MAV_FRAME_LOCAL_NED to MAV_FRAME_BODY_FRD
+ * @param q  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0)
  * @param body_roll_rate [rad/s] Body roll rate
  * @param body_pitch_rate [rad/s] Body pitch rate
  * @param body_yaw_rate [rad/s] Body yaw rate
@@ -196,6 +173,27 @@ static inline uint16_t mavlink_msg_set_attitude_target_pack_chan(uint8_t system_
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,uint8_t target_system,uint8_t target_component,uint8_t type_mask,const float *q,float body_roll_rate,float body_pitch_rate,float body_yaw_rate,float thrust,const float *thrust_body)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -221,7 +219,16 @@ static inline uint16_t mavlink_msg_set_attitude_target_pack_chan(uint8_t system_
     packet.type_mask = type_mask;
     mav_array_memcpy(packet.q, q, sizeof(float)*4);
     mav_array_memcpy(packet.thrust_body, thrust_body, sizeof(float)*3);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_set_attitude_target_t* set_attitude_target_final = (mavlink_set_attitude_target_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), set_attitude_target_final, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_SET_ATTITUDE_TARGET;
@@ -256,20 +263,6 @@ static inline uint16_t mavlink_msg_set_attitude_target_encode_chan(uint8_t syste
 }
 
 /**
- * @brief Encode a set_attitude_target struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param set_attitude_target C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_set_attitude_target_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_set_attitude_target_t* set_attitude_target)
-{
-    return mavlink_msg_set_attitude_target_pack_status(system_id, component_id, _status, msg,  set_attitude_target->time_boot_ms, set_attitude_target->target_system, set_attitude_target->target_component, set_attitude_target->type_mask, set_attitude_target->q, set_attitude_target->body_roll_rate, set_attitude_target->body_pitch_rate, set_attitude_target->body_yaw_rate, set_attitude_target->thrust, set_attitude_target->thrust_body);
-}
-
-/**
  * @brief Send a set_attitude_target message
  * @param chan MAVLink channel to send the message
  *
@@ -277,7 +270,7 @@ static inline uint16_t mavlink_msg_set_attitude_target_encode_status(uint8_t sys
  * @param target_system  System ID
  * @param target_component  Component ID
  * @param type_mask  Bitmap to indicate which dimensions should be ignored by the vehicle.
- * @param q  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0) from MAV_FRAME_LOCAL_NED to MAV_FRAME_BODY_FRD
+ * @param q  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0)
  * @param body_roll_rate [rad/s] Body roll rate
  * @param body_pitch_rate [rad/s] Body pitch rate
  * @param body_yaw_rate [rad/s] Body yaw rate
@@ -333,7 +326,7 @@ static inline void mavlink_msg_set_attitude_target_send_struct(mavlink_channel_t
 
 #if MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -419,7 +412,7 @@ static inline uint8_t mavlink_msg_set_attitude_target_get_type_mask(const mavlin
 /**
  * @brief Get field q from set_attitude_target message
  *
- * @return  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0) from MAV_FRAME_LOCAL_NED to MAV_FRAME_BODY_FRD
+ * @return  Attitude quaternion (w, x, y, z order, zero-rotation is 1, 0, 0, 0)
  */
 static inline uint16_t mavlink_msg_set_attitude_target_get_q(const mavlink_message_t* msg, float *q)
 {
@@ -484,6 +477,26 @@ static inline uint16_t mavlink_msg_set_attitude_target_get_thrust_body(const mav
  */
 static inline void mavlink_msg_set_attitude_target_decode(const mavlink_message_t* msg, mavlink_set_attitude_target_t* set_attitude_target)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     set_attitude_target->time_boot_ms = mavlink_msg_set_attitude_target_get_time_boot_ms(msg);
     mavlink_msg_set_attitude_target_get_q(msg, set_attitude_target->q);
@@ -496,8 +509,22 @@ static inline void mavlink_msg_set_attitude_target_decode(const mavlink_message_
     set_attitude_target->type_mask = mavlink_msg_set_attitude_target_get_type_mask(msg);
     mavlink_msg_set_attitude_target_get_thrust_body(msg, set_attitude_target->thrust_body);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN? msg->len : MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN;
-        memset(set_attitude_target, 0, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
-    memcpy(set_attitude_target, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN? msg->len : MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN;
+    memset(set_attitude_target, 0, MAVLINK_MSG_ID_SET_ATTITUDE_TARGET_LEN);
+    memcpy(set_attitude_target, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(set_attitude_target, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

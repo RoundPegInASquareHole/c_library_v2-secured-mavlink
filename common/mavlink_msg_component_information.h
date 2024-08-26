@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE COMPONENT_INFORMATION PACKING
 
 #define MAVLINK_MSG_ID_COMPONENT_INFORMATION 395
@@ -6,10 +12,10 @@
 
 typedef struct __mavlink_component_information_t {
  uint32_t time_boot_ms; /*< [ms] Timestamp (time since system boot).*/
- uint32_t general_metadata_file_crc; /*<  CRC32 of the general metadata file (general_metadata_uri).*/
- uint32_t peripherals_metadata_file_crc; /*<  CRC32 of peripherals metadata file (peripherals_metadata_uri).*/
- char general_metadata_uri[100]; /*<  MAVLink FTP URI for the general metadata file (COMP_METADATA_TYPE_GENERAL), which may be compressed with xz. The file contains general component metadata, and may contain URI links for additional metadata (see COMP_METADATA_TYPE). The information is static from boot, and may be generated at compile time. The string needs to be zero terminated.*/
- char peripherals_metadata_uri[100]; /*<  (Optional) MAVLink FTP URI for the peripherals metadata file (COMP_METADATA_TYPE_PERIPHERALS), which may be compressed with xz. This contains data about "attached components" such as UAVCAN nodes. The peripherals are in a separate file because the information must be generated dynamically at runtime. The string needs to be zero terminated.*/
+ uint32_t general_metadata_file_crc; /*<  CRC32 of the TYPE_GENERAL file (can be used by a GCS for file caching).*/
+ uint32_t peripherals_metadata_file_crc; /*<  CRC32 of the TYPE_PERIPHERALS file (can be used by a GCS for file caching).*/
+ char general_metadata_uri[100]; /*<  Component definition URI for TYPE_GENERAL. This must be a MAVLink FTP URI and the file might be compressed with xz.*/
+ char peripherals_metadata_uri[100]; /*<  (Optional) Component definition URI for TYPE_PERIPHERALS. This must be a MAVLink FTP URI and the file might be compressed with xz.*/
 } mavlink_component_information_t;
 
 #define MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN 212
@@ -55,15 +61,35 @@ typedef struct __mavlink_component_information_t {
  * @param msg The MAVLink message to compress the data into
  *
  * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param general_metadata_file_crc  CRC32 of the general metadata file (general_metadata_uri).
- * @param general_metadata_uri  MAVLink FTP URI for the general metadata file (COMP_METADATA_TYPE_GENERAL), which may be compressed with xz. The file contains general component metadata, and may contain URI links for additional metadata (see COMP_METADATA_TYPE). The information is static from boot, and may be generated at compile time. The string needs to be zero terminated.
- * @param peripherals_metadata_file_crc  CRC32 of peripherals metadata file (peripherals_metadata_uri).
- * @param peripherals_metadata_uri  (Optional) MAVLink FTP URI for the peripherals metadata file (COMP_METADATA_TYPE_PERIPHERALS), which may be compressed with xz. This contains data about "attached components" such as UAVCAN nodes. The peripherals are in a separate file because the information must be generated dynamically at runtime. The string needs to be zero terminated.
+ * @param general_metadata_file_crc  CRC32 of the TYPE_GENERAL file (can be used by a GCS for file caching).
+ * @param general_metadata_uri  Component definition URI for TYPE_GENERAL. This must be a MAVLink FTP URI and the file might be compressed with xz.
+ * @param peripherals_metadata_file_crc  CRC32 of the TYPE_PERIPHERALS file (can be used by a GCS for file caching).
+ * @param peripherals_metadata_uri  (Optional) Component definition URI for TYPE_PERIPHERALS. This must be a MAVLink FTP URI and the file might be compressed with xz.
  * @return length of the message in bytes (excluding serial stream start sign)
  */
 static inline uint16_t mavlink_msg_component_information_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, uint32_t general_metadata_file_crc, const char *general_metadata_uri, uint32_t peripherals_metadata_file_crc, const char *peripherals_metadata_uri)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -79,54 +105,20 @@ static inline uint16_t mavlink_msg_component_information_pack(uint8_t system_id,
     packet.peripherals_metadata_file_crc = peripherals_metadata_file_crc;
     mav_array_memcpy(packet.general_metadata_uri, general_metadata_uri, sizeof(char)*100);
     mav_array_memcpy(packet.peripherals_metadata_uri, peripherals_metadata_uri, sizeof(char)*100);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_component_information_t* component_information_final = (mavlink_component_information_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), component_information_final, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_COMPONENT_INFORMATION;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_COMPONENT_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN, MAVLINK_MSG_ID_COMPONENT_INFORMATION_CRC);
-}
-
-/**
- * @brief Pack a component_information message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param general_metadata_file_crc  CRC32 of the general metadata file (general_metadata_uri).
- * @param general_metadata_uri  MAVLink FTP URI for the general metadata file (COMP_METADATA_TYPE_GENERAL), which may be compressed with xz. The file contains general component metadata, and may contain URI links for additional metadata (see COMP_METADATA_TYPE). The information is static from boot, and may be generated at compile time. The string needs to be zero terminated.
- * @param peripherals_metadata_file_crc  CRC32 of peripherals metadata file (peripherals_metadata_uri).
- * @param peripherals_metadata_uri  (Optional) MAVLink FTP URI for the peripherals metadata file (COMP_METADATA_TYPE_PERIPHERALS), which may be compressed with xz. This contains data about "attached components" such as UAVCAN nodes. The peripherals are in a separate file because the information must be generated dynamically at runtime. The string needs to be zero terminated.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_component_information_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, uint32_t general_metadata_file_crc, const char *general_metadata_uri, uint32_t peripherals_metadata_file_crc, const char *peripherals_metadata_uri)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_uint32_t(buf, 4, general_metadata_file_crc);
-    _mav_put_uint32_t(buf, 8, peripherals_metadata_file_crc);
-    _mav_put_char_array(buf, 12, general_metadata_uri, 100);
-    _mav_put_char_array(buf, 112, peripherals_metadata_uri, 100);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
-#else
-    mavlink_component_information_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.general_metadata_file_crc = general_metadata_file_crc;
-    packet.peripherals_metadata_file_crc = peripherals_metadata_file_crc;
-    mav_array_memcpy(packet.general_metadata_uri, general_metadata_uri, sizeof(char)*100);
-    mav_array_memcpy(packet.peripherals_metadata_uri, peripherals_metadata_uri, sizeof(char)*100);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_COMPONENT_INFORMATION;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_COMPONENT_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN, MAVLINK_MSG_ID_COMPONENT_INFORMATION_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_COMPONENT_INFORMATION_MIN_LEN, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
-#endif
 }
 
 /**
@@ -136,16 +128,37 @@ static inline uint16_t mavlink_msg_component_information_pack_status(uint8_t sys
  * @param chan The MAVLink channel this message will be sent over
  * @param msg The MAVLink message to compress the data into
  * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param general_metadata_file_crc  CRC32 of the general metadata file (general_metadata_uri).
- * @param general_metadata_uri  MAVLink FTP URI for the general metadata file (COMP_METADATA_TYPE_GENERAL), which may be compressed with xz. The file contains general component metadata, and may contain URI links for additional metadata (see COMP_METADATA_TYPE). The information is static from boot, and may be generated at compile time. The string needs to be zero terminated.
- * @param peripherals_metadata_file_crc  CRC32 of peripherals metadata file (peripherals_metadata_uri).
- * @param peripherals_metadata_uri  (Optional) MAVLink FTP URI for the peripherals metadata file (COMP_METADATA_TYPE_PERIPHERALS), which may be compressed with xz. This contains data about "attached components" such as UAVCAN nodes. The peripherals are in a separate file because the information must be generated dynamically at runtime. The string needs to be zero terminated.
+ * @param general_metadata_file_crc  CRC32 of the TYPE_GENERAL file (can be used by a GCS for file caching).
+ * @param general_metadata_uri  Component definition URI for TYPE_GENERAL. This must be a MAVLink FTP URI and the file might be compressed with xz.
+ * @param peripherals_metadata_file_crc  CRC32 of the TYPE_PERIPHERALS file (can be used by a GCS for file caching).
+ * @param peripherals_metadata_uri  (Optional) Component definition URI for TYPE_PERIPHERALS. This must be a MAVLink FTP URI and the file might be compressed with xz.
  * @return length of the message in bytes (excluding serial stream start sign)
  */
 static inline uint16_t mavlink_msg_component_information_pack_chan(uint8_t system_id, uint8_t component_id, uint8_t chan,
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,uint32_t general_metadata_file_crc,const char *general_metadata_uri,uint32_t peripherals_metadata_file_crc,const char *peripherals_metadata_uri)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -161,7 +174,16 @@ static inline uint16_t mavlink_msg_component_information_pack_chan(uint8_t syste
     packet.peripherals_metadata_file_crc = peripherals_metadata_file_crc;
     mav_array_memcpy(packet.general_metadata_uri, general_metadata_uri, sizeof(char)*100);
     mav_array_memcpy(packet.peripherals_metadata_uri, peripherals_metadata_uri, sizeof(char)*100);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_component_information_t* component_information_final = (mavlink_component_information_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), component_information_final, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_COMPONENT_INFORMATION;
@@ -196,28 +218,14 @@ static inline uint16_t mavlink_msg_component_information_encode_chan(uint8_t sys
 }
 
 /**
- * @brief Encode a component_information struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param component_information C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_component_information_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_component_information_t* component_information)
-{
-    return mavlink_msg_component_information_pack_status(system_id, component_id, _status, msg,  component_information->time_boot_ms, component_information->general_metadata_file_crc, component_information->general_metadata_uri, component_information->peripherals_metadata_file_crc, component_information->peripherals_metadata_uri);
-}
-
-/**
  * @brief Send a component_information message
  * @param chan MAVLink channel to send the message
  *
  * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param general_metadata_file_crc  CRC32 of the general metadata file (general_metadata_uri).
- * @param general_metadata_uri  MAVLink FTP URI for the general metadata file (COMP_METADATA_TYPE_GENERAL), which may be compressed with xz. The file contains general component metadata, and may contain URI links for additional metadata (see COMP_METADATA_TYPE). The information is static from boot, and may be generated at compile time. The string needs to be zero terminated.
- * @param peripherals_metadata_file_crc  CRC32 of peripherals metadata file (peripherals_metadata_uri).
- * @param peripherals_metadata_uri  (Optional) MAVLink FTP URI for the peripherals metadata file (COMP_METADATA_TYPE_PERIPHERALS), which may be compressed with xz. This contains data about "attached components" such as UAVCAN nodes. The peripherals are in a separate file because the information must be generated dynamically at runtime. The string needs to be zero terminated.
+ * @param general_metadata_file_crc  CRC32 of the TYPE_GENERAL file (can be used by a GCS for file caching).
+ * @param general_metadata_uri  Component definition URI for TYPE_GENERAL. This must be a MAVLink FTP URI and the file might be compressed with xz.
+ * @param peripherals_metadata_file_crc  CRC32 of the TYPE_PERIPHERALS file (can be used by a GCS for file caching).
+ * @param peripherals_metadata_uri  (Optional) Component definition URI for TYPE_PERIPHERALS. This must be a MAVLink FTP URI and the file might be compressed with xz.
  */
 #ifdef MAVLINK_USE_CONVENIENCE_FUNCTIONS
 
@@ -258,7 +266,7 @@ static inline void mavlink_msg_component_information_send_struct(mavlink_channel
 
 #if MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -304,7 +312,7 @@ static inline uint32_t mavlink_msg_component_information_get_time_boot_ms(const 
 /**
  * @brief Get field general_metadata_file_crc from component_information message
  *
- * @return  CRC32 of the general metadata file (general_metadata_uri).
+ * @return  CRC32 of the TYPE_GENERAL file (can be used by a GCS for file caching).
  */
 static inline uint32_t mavlink_msg_component_information_get_general_metadata_file_crc(const mavlink_message_t* msg)
 {
@@ -314,7 +322,7 @@ static inline uint32_t mavlink_msg_component_information_get_general_metadata_fi
 /**
  * @brief Get field general_metadata_uri from component_information message
  *
- * @return  MAVLink FTP URI for the general metadata file (COMP_METADATA_TYPE_GENERAL), which may be compressed with xz. The file contains general component metadata, and may contain URI links for additional metadata (see COMP_METADATA_TYPE). The information is static from boot, and may be generated at compile time. The string needs to be zero terminated.
+ * @return  Component definition URI for TYPE_GENERAL. This must be a MAVLink FTP URI and the file might be compressed with xz.
  */
 static inline uint16_t mavlink_msg_component_information_get_general_metadata_uri(const mavlink_message_t* msg, char *general_metadata_uri)
 {
@@ -324,7 +332,7 @@ static inline uint16_t mavlink_msg_component_information_get_general_metadata_ur
 /**
  * @brief Get field peripherals_metadata_file_crc from component_information message
  *
- * @return  CRC32 of peripherals metadata file (peripherals_metadata_uri).
+ * @return  CRC32 of the TYPE_PERIPHERALS file (can be used by a GCS for file caching).
  */
 static inline uint32_t mavlink_msg_component_information_get_peripherals_metadata_file_crc(const mavlink_message_t* msg)
 {
@@ -334,7 +342,7 @@ static inline uint32_t mavlink_msg_component_information_get_peripherals_metadat
 /**
  * @brief Get field peripherals_metadata_uri from component_information message
  *
- * @return  (Optional) MAVLink FTP URI for the peripherals metadata file (COMP_METADATA_TYPE_PERIPHERALS), which may be compressed with xz. This contains data about "attached components" such as UAVCAN nodes. The peripherals are in a separate file because the information must be generated dynamically at runtime. The string needs to be zero terminated.
+ * @return  (Optional) Component definition URI for TYPE_PERIPHERALS. This must be a MAVLink FTP URI and the file might be compressed with xz.
  */
 static inline uint16_t mavlink_msg_component_information_get_peripherals_metadata_uri(const mavlink_message_t* msg, char *peripherals_metadata_uri)
 {
@@ -349,6 +357,26 @@ static inline uint16_t mavlink_msg_component_information_get_peripherals_metadat
  */
 static inline void mavlink_msg_component_information_decode(const mavlink_message_t* msg, mavlink_component_information_t* component_information)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     component_information->time_boot_ms = mavlink_msg_component_information_get_time_boot_ms(msg);
     component_information->general_metadata_file_crc = mavlink_msg_component_information_get_general_metadata_file_crc(msg);
@@ -356,8 +384,22 @@ static inline void mavlink_msg_component_information_decode(const mavlink_messag
     mavlink_msg_component_information_get_general_metadata_uri(msg, component_information->general_metadata_uri);
     mavlink_msg_component_information_get_peripherals_metadata_uri(msg, component_information->peripherals_metadata_uri);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN? msg->len : MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN;
-        memset(component_information, 0, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
-    memcpy(component_information, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN? msg->len : MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN;
+    memset(component_information, 0, MAVLINK_MSG_ID_COMPONENT_INFORMATION_LEN);
+    memcpy(component_information, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(component_information, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }

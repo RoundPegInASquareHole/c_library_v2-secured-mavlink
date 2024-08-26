@@ -1,4 +1,10 @@
 #pragma once
+
+#include <stdio.h>
+
+/// \note Include encryption algorithms
+#include "../chacha20.h"
+
 // MESSAGE RC_CHANNELS_RAW PACKING
 
 #define MAVLINK_MSG_ID_RC_CHANNELS_RAW 35
@@ -87,6 +93,26 @@ typedef struct __mavlink_rc_channels_raw_t {
 static inline uint16_t mavlink_msg_rc_channels_raw_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
                                uint32_t time_boot_ms, uint8_t port, uint16_t chan1_raw, uint16_t chan2_raw, uint16_t chan3_raw, uint16_t chan4_raw, uint16_t chan5_raw, uint16_t chan6_raw, uint16_t chan7_raw, uint16_t chan8_raw, uint8_t rssi)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+    
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -116,74 +142,20 @@ static inline uint16_t mavlink_msg_rc_channels_raw_pack(uint8_t system_id, uint8
     packet.port = port;
     packet.rssi = rssi;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
+            
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_rc_channels_raw_t* rc_channels_raw_final = (mavlink_rc_channels_raw_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), rc_channels_raw_final, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_RC_CHANNELS_RAW;
     return mavlink_finalize_message(msg, system_id, component_id, MAVLINK_MSG_ID_RC_CHANNELS_RAW_MIN_LEN, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN, MAVLINK_MSG_ID_RC_CHANNELS_RAW_CRC);
-}
-
-/**
- * @brief Pack a rc_channels_raw message
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- *
- * @param time_boot_ms [ms] Timestamp (time since system boot).
- * @param port  Servo output port (set of 8 outputs = 1 port). Flight stacks running on Pixhawk should use: 0 = MAIN, 1 = AUX.
- * @param chan1_raw [us] RC channel 1 value.
- * @param chan2_raw [us] RC channel 2 value.
- * @param chan3_raw [us] RC channel 3 value.
- * @param chan4_raw [us] RC channel 4 value.
- * @param chan5_raw [us] RC channel 5 value.
- * @param chan6_raw [us] RC channel 6 value.
- * @param chan7_raw [us] RC channel 7 value.
- * @param chan8_raw [us] RC channel 8 value.
- * @param rssi  Receive signal strength indicator in device-dependent units/scale. Values: [0-254], UINT8_MAX: invalid/unknown.
- * @return length of the message in bytes (excluding serial stream start sign)
- */
-static inline uint16_t mavlink_msg_rc_channels_raw_pack_status(uint8_t system_id, uint8_t component_id, mavlink_status_t *_status, mavlink_message_t* msg,
-                               uint32_t time_boot_ms, uint8_t port, uint16_t chan1_raw, uint16_t chan2_raw, uint16_t chan3_raw, uint16_t chan4_raw, uint16_t chan5_raw, uint16_t chan6_raw, uint16_t chan7_raw, uint16_t chan8_raw, uint8_t rssi)
-{
-#if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
-    char buf[MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN];
-    _mav_put_uint32_t(buf, 0, time_boot_ms);
-    _mav_put_uint16_t(buf, 4, chan1_raw);
-    _mav_put_uint16_t(buf, 6, chan2_raw);
-    _mav_put_uint16_t(buf, 8, chan3_raw);
-    _mav_put_uint16_t(buf, 10, chan4_raw);
-    _mav_put_uint16_t(buf, 12, chan5_raw);
-    _mav_put_uint16_t(buf, 14, chan6_raw);
-    _mav_put_uint16_t(buf, 16, chan7_raw);
-    _mav_put_uint16_t(buf, 18, chan8_raw);
-    _mav_put_uint8_t(buf, 20, port);
-    _mav_put_uint8_t(buf, 21, rssi);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
-#else
-    mavlink_rc_channels_raw_t packet;
-    packet.time_boot_ms = time_boot_ms;
-    packet.chan1_raw = chan1_raw;
-    packet.chan2_raw = chan2_raw;
-    packet.chan3_raw = chan3_raw;
-    packet.chan4_raw = chan4_raw;
-    packet.chan5_raw = chan5_raw;
-    packet.chan6_raw = chan6_raw;
-    packet.chan7_raw = chan7_raw;
-    packet.chan8_raw = chan8_raw;
-    packet.port = port;
-    packet.rssi = rssi;
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
-#endif
-
-    msg->msgid = MAVLINK_MSG_ID_RC_CHANNELS_RAW;
-#if MAVLINK_CRC_EXTRA
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_RC_CHANNELS_RAW_MIN_LEN, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN, MAVLINK_MSG_ID_RC_CHANNELS_RAW_CRC);
-#else
-    return mavlink_finalize_message_buffer(msg, system_id, component_id, _status, MAVLINK_MSG_ID_RC_CHANNELS_RAW_MIN_LEN, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
-#endif
 }
 
 /**
@@ -209,6 +181,27 @@ static inline uint16_t mavlink_msg_rc_channels_raw_pack_chan(uint8_t system_id, 
                                mavlink_message_t* msg,
                                    uint32_t time_boot_ms,uint8_t port,uint16_t chan1_raw,uint16_t chan2_raw,uint16_t chan3_raw,uint16_t chan4_raw,uint16_t chan5_raw,uint16_t chan6_raw,uint16_t chan7_raw,uint16_t chan8_raw,uint8_t rssi)
 {
+
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    uint8_t chacha20_key[] = {
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13,
+        0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1a, 0x1b,
+        0x1c, 0x1d, 0x1e, 0x1f
+    };
+
+    // 96-bit nonce
+    uint8_t nonce[] = {
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x4a, 
+        0x00, 0x00, 0x00, 0x00
+    };
+        
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     char buf[MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN];
     _mav_put_uint32_t(buf, 0, time_boot_ms);
@@ -238,7 +231,16 @@ static inline uint16_t mavlink_msg_rc_channels_raw_pack_chan(uint8_t system_id, 
     packet.port = port;
     packet.rssi = rssi;
 
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), &packet, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
+        
+    const char* packet_char = (const char*) &packet;
+    
+    uint8_t encrypt[MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN];
+    ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)packet_char, (uint8_t *)encrypt, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
+    const char* encrypt_char = (const char*) &encrypt;
+    
+    mavlink_rc_channels_raw_t* rc_channels_raw_final = (mavlink_rc_channels_raw_t*)encrypt_char;
+    memcpy(_MAV_PAYLOAD_NON_CONST(msg), rc_channels_raw_final, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
+    
 #endif
 
     msg->msgid = MAVLINK_MSG_ID_RC_CHANNELS_RAW;
@@ -270,20 +272,6 @@ static inline uint16_t mavlink_msg_rc_channels_raw_encode(uint8_t system_id, uin
 static inline uint16_t mavlink_msg_rc_channels_raw_encode_chan(uint8_t system_id, uint8_t component_id, uint8_t chan, mavlink_message_t* msg, const mavlink_rc_channels_raw_t* rc_channels_raw)
 {
     return mavlink_msg_rc_channels_raw_pack_chan(system_id, component_id, chan, msg, rc_channels_raw->time_boot_ms, rc_channels_raw->port, rc_channels_raw->chan1_raw, rc_channels_raw->chan2_raw, rc_channels_raw->chan3_raw, rc_channels_raw->chan4_raw, rc_channels_raw->chan5_raw, rc_channels_raw->chan6_raw, rc_channels_raw->chan7_raw, rc_channels_raw->chan8_raw, rc_channels_raw->rssi);
-}
-
-/**
- * @brief Encode a rc_channels_raw struct with provided status structure
- *
- * @param system_id ID of this system
- * @param component_id ID of this component (e.g. 200 for IMU)
- * @param status MAVLink status structure
- * @param msg The MAVLink message to compress the data into
- * @param rc_channels_raw C-struct to read the message contents from
- */
-static inline uint16_t mavlink_msg_rc_channels_raw_encode_status(uint8_t system_id, uint8_t component_id, mavlink_status_t* _status, mavlink_message_t* msg, const mavlink_rc_channels_raw_t* rc_channels_raw)
-{
-    return mavlink_msg_rc_channels_raw_pack_status(system_id, component_id, _status, msg,  rc_channels_raw->time_boot_ms, rc_channels_raw->port, rc_channels_raw->chan1_raw, rc_channels_raw->chan2_raw, rc_channels_raw->chan3_raw, rc_channels_raw->chan4_raw, rc_channels_raw->chan5_raw, rc_channels_raw->chan6_raw, rc_channels_raw->chan7_raw, rc_channels_raw->chan8_raw, rc_channels_raw->rssi);
 }
 
 /**
@@ -355,7 +343,7 @@ static inline void mavlink_msg_rc_channels_raw_send_struct(mavlink_channel_t cha
 
 #if MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
-  This variant of _send() can be used to save stack space by re-using
+  This varient of _send() can be used to save stack space by re-using
   memory from the receive buffer.  The caller provides a
   mavlink_message_t which is the size of a full mavlink message. This
   is usually the receive buffer for the channel, and allows a reply to an
@@ -520,6 +508,26 @@ static inline uint8_t mavlink_msg_rc_channels_raw_get_rssi(const mavlink_message
  */
 static inline void mavlink_msg_rc_channels_raw_decode(const mavlink_message_t* msg, mavlink_rc_channels_raw_t* rc_channels_raw)
 {
+    /// \todo define the key and the nonce in the algorithm file and make them accessible for this file
+    // 256-bit key
+    //uint8_t chacha20_key[] = {
+     //   0x00, 0x01, 0x02, 0x03,
+     //   0x04, 0x05, 0x06, 0x07,
+     //   0x08, 0x09, 0x0a, 0x0b,
+     //   0x0c, 0x0d, 0x0e, 0x0f,
+      //  0x10, 0x11, 0x12, 0x13,
+      //  0x14, 0x15, 0x16, 0x17,
+      //  0x18, 0x19, 0x1a, 0x1b,
+     //   0x1c, 0x1d, 0x1e, 0x1f
+    //};
+
+    // 96-bit nonce
+   // uint8_t nonce[] = {
+    //    0x00, 0x00, 0x00, 0x00, 
+   //     0x00, 0x00, 0x00, 0x4a, 
+   //     0x00, 0x00, 0x00, 0x00
+   // };
+
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
     rc_channels_raw->time_boot_ms = mavlink_msg_rc_channels_raw_get_time_boot_ms(msg);
     rc_channels_raw->chan1_raw = mavlink_msg_rc_channels_raw_get_chan1_raw(msg);
@@ -533,8 +541,22 @@ static inline void mavlink_msg_rc_channels_raw_decode(const mavlink_message_t* m
     rc_channels_raw->port = mavlink_msg_rc_channels_raw_get_port(msg);
     rc_channels_raw->rssi = mavlink_msg_rc_channels_raw_get_rssi(msg);
 #else
-        uint8_t len = msg->len < MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN? msg->len : MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN;
-        memset(rc_channels_raw, 0, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
-    memcpy(rc_channels_raw, _MAV_PAYLOAD(msg), len);
+    uint8_t len = msg->len < MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN? msg->len : MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN;
+    memset(rc_channels_raw, 0, MAVLINK_MSG_ID_RC_CHANNELS_RAW_LEN);
+    memcpy(rc_channels_raw, _MAV_PAYLOAD(msg), len); // this is the original way to decode the incomming payload
+
+    //const char* payload = _MAV_PAYLOAD(msg);
+            
+    // printf("Encrypted data received from AP:\n");
+    // hex_print((uint8_t *)payload, 0,len);
+            
+    //uint8_t decrypt[len];
+    //ChaCha20XOR(chacha20_key, 1, nonce, (uint8_t *)payload, (uint8_t *)decrypt, len);
+            
+    //const char* decrypt_char = (const char*) &decrypt;
+    //memcpy(rc_channels_raw, decrypt_char, len);
+
+    // printf("Decrypted data received from AP:\n"); 
+	// hex_print((uint8_t *)decrypt_char, 0,len);            
 #endif
 }
